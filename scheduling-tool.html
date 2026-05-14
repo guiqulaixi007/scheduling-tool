@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>需求交付排期工具</title>
+<style>
+  :root {
+    --primary: #4f6ef7;
+    --primary-hover: #3a56d4;
+    --primary-light: #eef1fe;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --text: #1e293b;
+    --text-secondary: #64748b;
+    --border: #e2e8f0;
+    --bg: #f8fafc;
+    --bg-card: #ffffff;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.05);
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+
+  /* ===== 顶部导航 ===== */
+  .header {
+    background: var(--bg-card); border-bottom: 1px solid var(--border);
+    padding: 0 24px; height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow);
+  }
+  .header-logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; color: var(--primary); }
+  .header-actions { display: flex; gap: 8px; }
+
+  /* ===== 步骤指示器 ===== */
+  .steps-wrapper { background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 0 24px; }
+  .steps { display: flex; align-items: center; max-width: 600px; margin: 0 auto; padding: 16px 0; }
+  .step { display: flex; align-items: center; flex: 1; }
+  .step-circle {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 13px; flex-shrink: 0;
+    background: var(--border); color: var(--text-secondary); transition: all 0.3s;
+  }
+  .step.active .step-circle { background: var(--primary); color: #fff; }
+  .step.done   .step-circle { background: var(--success); color: #fff; }
+  .step-label { margin-left: 8px; font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+  .step.active .step-label  { color: var(--primary); font-weight: 600; }
+  .step.done   .step-label  { color: var(--success); }
+  .step-line { flex: 1; height: 2px; background: var(--border); margin: 0 12px; min-width: 20px; }
+  .step.done .step-line { background: var(--success); }
+
+  /* ===== 主内容区 ===== */
+  .main { max-width: 960px; margin: 0 auto; padding: 24px 24px 80px; }
+
+  /* ===== 通用卡片 ===== */
+  .card { background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 24px; margin-bottom: 16px; }
+  .card-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: var(--text); display: flex; align-items: center; gap: 8px; }
+
+  /* ===== 表单 ===== */
+  .form-group { margin-bottom: 16px; }
+  .form-label { display: block; font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
+  .form-input, .form-select {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); font-size: 14px; color: var(--text);
+    background: #fff; transition: border-color 0.2s, box-shadow 0.2s; outline: none;
+  }
+  .form-input:focus, .form-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,110,247,0.12); }
+  .form-input-sm { padding: 7px 10px; font-size: 13px; }
+  .form-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  textarea.form-input { min-height: 120px; resize: vertical; font-family: monospace; font-size: 12px; }
+
+  /* ===== 按钮 ===== */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 9px 18px; border-radius: var(--radius-sm);
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    border: 1px solid transparent; transition: all 0.2s; white-space: nowrap;
+  }
+  .btn-primary       { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-secondary       { background: #fff; color: var(--text); border-color: var(--border); }
+  .btn-secondary:hover { background: var(--bg); border-color: #c2ccda; }
+  .btn-danger-ghost       { background: transparent; color: var(--danger); border-color: transparent; padding: 6px 8px; }
+  .btn-danger-ghost:hover { background: #fee2e2; border-radius: var(--radius-sm); }
+  .btn-sm { padding: 6px 12px; font-size: 13px; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== 角色颜色主题 ===== */
+  .role-backend  { --rc: #6366f1; }
+  .role-frontend { --rc: #0ea5e9; }
+  .role-ios      { --rc: #8b5cf6; }
+  .role-android  { --rc: #10b981; }
+  .role-test     { --rc: #f59e0b; }
+  .role-badge-bg { background: color-mix(in srgb, var(--rc) 15%, transparent); color: var(--rc); }
+
+  /* ===== 步骤2 角色区 ===== */
+  .role-type-selector { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+  .role-type-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border: 2px solid var(--border);
+    border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 500;
+    background: #fff; color: var(--text-secondary); transition: all 0.2s;
+  }
+  .role-type-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+
+  .member-list { display: flex; flex-direction: column; gap: 12px; }
+  .member-card { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: box-shadow 0.2s; }
+  .member-card:hover { box-shadow: var(--shadow-md); }
+  .member-card-header { padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; background: #fff; }
+  .member-card-header-left { display: flex; align-items: center; gap: 10px; }
+  .member-role-badge { padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .member-name-input {
+    border: none; outline: none; font-size: 14px; font-weight: 500;
+    background: transparent; width: 130px; padding: 2px 4px;
+    border-bottom: 1px dashed transparent;
+  }
+  .member-name-input:hover, .member-name-input:focus { border-bottom-color: var(--primary); }
+  .member-card-body { padding: 16px; border-top: 1px solid var(--border); background: var(--bg); }
+  .member-card-body.collapsed { display: none; }
+
+  /* 依赖选择 */
+  .dep-section-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .dep-checkboxes { display: flex; flex-wrap: wrap; gap: 10px; }
+  .dep-checkbox-item { display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
+  .dep-checkbox-item input { cursor: pointer; width: 14px; height: 14px; accent-color: var(--primary); }
+
+  /* 成员摘要条 */
+  .member-summary { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); }
+  .member-summary-item { display: flex; align-items: center; gap: 4px; }
+
+  /* 联调信息栏 */
+  .joint-debug-bar {
+    background: linear-gradient(135deg, #fef9ec 0%, #fef3c7 100%);
+    border: 1px solid #fcd34d; border-radius: var(--radius);
+    padding: 14px 20px; margin-top: 8px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .joint-debug-bar .jd-label { font-size: 13px; font-weight: 600; color: #92400e; }
+  .joint-debug-bar .jd-date  { font-size: 15px; font-weight: 700; color: #b45309; }
+  .joint-debug-bar .jd-desc  { font-size: 12px; color: #92400e; opacity: 0.8; }
+
+  /* ===== 步骤3 汇总卡片 ===== */
+  .summary-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .summary-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; text-align: center; }
+  .summary-card .sc-label { font-size: 11px; color: var(--text-secondary); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .summary-card .sc-value { font-size: 17px; font-weight: 700; color: var(--text); }
+  .summary-card .sc-sub   { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+  /* ===== 甘特图 ===== */
+  .gantt-wrapper { overflow-x: auto; border-radius: var(--radius); background: #fff; }
+  .gantt-container { position: relative; }
+  .gantt-header { display: flex; border-bottom: 2px solid var(--border); position: sticky; top: 0; z-index: 10; background: #fff; }
+  .gantt-label-col { width: 130px; min-width: 130px; flex-shrink: 0; border-right: 1px solid var(--border); }
+  .gantt-header .gantt-label-col { padding: 8px 12px; font-size: 12px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; }
+  .gantt-dates-header { flex: 1; display: flex; }
+  .gantt-date-cell {
+    flex-shrink: 0; text-align: center;
+    font-size: 11px; color: var(--text-secondary);
+    padding: 4px 2px; border-right: 1px solid #f1f5f9;
+  }
+  .gantt-date-cell.weekend { background: #f8fafc; color: #94a3b8; }
+  .gantt-date-cell.today-col { background: #eff6ff; color: var(--primary); font-weight: 700; }
+  .gantt-date-cell .dc-month { font-weight: 600; font-size: 10px; }
+  .gantt-date-cell .dc-day   { font-size: 13px; font-weight: 500; }
+  .gantt-date-cell .dc-week  { font-size: 9px; opacity: 0.7; }
+
+  .gantt-body {}
+  .gantt-row { display: flex; border-bottom: 1px solid #f1f5f9; min-height: 50px; }
+  .gantt-row:last-child { border-bottom: none; }
+  .gantt-row .gantt-label-col {
+    padding: 8px 12px; font-size: 13px; font-weight: 500;
+    display: flex; align-items: center; gap: 6px;
+    border-right: 1px solid var(--border); background: #fff;
+    position: sticky; left: 0; z-index: 5;
+    overflow: hidden;
+  }
+  .gantt-bars { flex: 1; position: relative; display: flex; align-items: center; }
+  .gantt-bar {
+    position: absolute; height: 28px; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 500; color: #fff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 7px;
+    cursor: default; transition: opacity 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+  .gantt-bar:hover { opacity: 0.85; }
+  .gantt-bar-dev  { background: linear-gradient(90deg, #4f6ef7, #6683f8); }
+  .gantt-bar-jd   { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+  .gantt-bar-test { background: linear-gradient(90deg, #22c55e, #34d399); }
+  .gantt-cell-bg { position: absolute; top: 0; bottom: 0; }
+  .gantt-cell-bg.weekend-bg { background: rgba(241,245,249,0.7); }
+  .gantt-cell-bg.today-line { border-left: 2px solid var(--primary); }
+  .gantt-row.test-row .gantt-label-col { background: #f0fdf4; }
+
+  /* ===== 工具栏 ===== */
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .toolbar-divider { width: 1px; height: 24px; background: var(--border); }
+
+  /* ===== 分隔线 ===== */
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+  /* ===== 空状态 ===== */
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--text-secondary); }
+  .empty-state svg { width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.35; display: block; margin: 0 auto 12px; }
+  .empty-state p { font-size: 14px; }
+
+  /* ===== Toast ===== */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1e293b; color: #fff; padding: 10px 20px; border-radius: 8px;
+    font-size: 13px; z-index: 1000; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ===== 模态框 ===== */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .modal-overlay.show { opacity: 1; pointer-events: auto; }
+  .modal {
+    background: #fff; border-radius: var(--radius); padding: 24px;
+    max-width: 500px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    transform: scale(0.95); transition: transform 0.2s;
+  }
+  .modal-overlay.show .modal { transform: scale(1); }
+  .modal-title  { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+  /* ===== 响应式 ===== */
+  @media (max-width: 640px) {
+    .main { padding: 16px 12px 60px; }
+    .header { padding: 0 12px; }
+    .steps-wrapper { padding: 0 12px; }
+    .form-row, .form-row-3 { grid-template-columns: 1fr; }
+    .summary-cards { grid-template-columns: 1fr 1fr; }
+    .gantt-label-col { width: 90px !important; min-width: 90px !important; font-size: 12px !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<header class="header">
+  <div class="header-logo">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="4" width="18" height="18" rx="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+    需求排期工具
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span id="syncStatus" style="font-size:12px;color:var(--text-secondary);"></span>
+    <div class="header-actions" id="headerActions">
+      <button class="btn btn-secondary btn-sm" onclick="showImportModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        导入 JSON
+      </button>
+      <button class="btn btn-primary btn-sm" onclick="createRoom()" id="createRoomBtn" style="display:none;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        开启协作
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ===== 步骤指示器 ===== -->
+<div class="steps-wrapper">
+  <div class="steps">
+    <div class="step active" id="stepIndicator1">
+      <div class="step-circle">1</div>
+      <div class="step-label">项目信息</div>
+    </div>
+    <div class="step-line" id="stepLine1"></div>
+    <div class="step" id="stepIndicator2">
+      <div class="step-circle">2</div>
+      <div class="step-label">角色配置</div>
+    </div>
+    <div class="step-line" id="stepLine2"></div>
+    <div class="step" id="stepIndicator3">
+      <div class="step-circle">3</div>
+      <div class="step-label">排期甘特图</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 主内容 ===== -->
+<div class="main">
+
+  <!-- ========== 步骤1：项目信息 ========== -->
+  <div id="step1">
+    <h1 style="font-size:22px;font-weight:700;margin-bottom:4px;">新建需求排期</h1>
+    <p style="color:var(--text-secondary);font-size:14px;margin-bottom:24px;">填写需求基本信息，开始排期规划</p>
+
+    <div class="card">
+      <div class="card-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+        基本信息
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">需求名称 <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="projectName" class="form-input" placeholder="例：用户消息中心 v2.0 改版">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">需求评审日期</label>
+          <input type="date" id="reviewDate" class="form-input">
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">仅作参考，排期起点以各角色填写为准</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">目标提测日期（可选）</label>
+          <input type="date" id="targetTestDate" class="form-input">
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">用于甘特图中标注对比是否超期</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+      <button class="btn btn-primary" onclick="goStep2()">
+        下一步：配置参与角色
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== 步骤2：角色配置 ========== -->
+  <div id="step2" style="display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+      <div>
+        <h2 style="font-size:20px;font-weight:700;" id="step2Title">配置参与角色</h2>
+        <p style="color:var(--text-secondary);font-size:13px;margin-top:2px;">添加本次需求参与人员，填写工作量和依赖关系</p>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="goStep1()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        返回修改
+      </button>
+    </div>
+
+    <!-- 添加角色按钮 -->
+    <div class="card">
+      <div class="card-title">点击添加参与角色（同一角色可多次添加）</div>
+      <div class="role-type-selector">
+        <button class="role-type-btn" onclick="addMember('backend')">  <span>⚙️</span> 后端工程师</button>
+        <button class="role-type-btn" onclick="addMember('frontend')"> <span>🖥️</span> 前端工程师</button>
+        <button class="role-type-btn" onclick="addMember('ios')">      <span>📱</span> iOS 工程师</button>
+        <button class="role-type-btn" onclick="addMember('android')">  <span>🤖</span> Android 工程师</button>
+        <button class="role-type-btn" onclick="addMember('test')">     <span>🧪</span> 测试工程师</button>
+      </div>
+    </div>
+
+    <!-- 角色卡片列表 -->
+    <div id="memberList" class="member-list"></div>
+
+    <!-- 空状态 -->
+    <div id="memberEmptyState" class="empty-state card">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      <p>暂未添加参与角色，点击上方按钮添加</p>
+    </div>
+
+    <!-- 联调起点提示 -->
+    <div id="jointDebugInfo" style="display:none;">
+      <div class="joint-debug-bar">
+        <span style="font-size:18px;">🔗</span>
+        <span class="jd-label">联调起点：</span>
+        <span class="jd-date" id="jointDebugStartDisplay">—</span>
+        <span class="jd-desc"  id="jointDebugStartDesc"></span>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;margin-top:16px;">
+      <button class="btn btn-secondary" onclick="goStep1()">返回修改</button>
+      <button class="btn btn-primary" id="generateBtn" onclick="generateGantt()" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="18" rx="2"/>
+          <line x1="3"  y1="10" x2="21" y2="10"/>
+          <line x1="9"  y1="4"  x2="9"  y2="10"/>
+          <line x1="15" y1="4"  x2="15" y2="10"/>
+        </svg>
+        生成排期甘特图
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== 步骤3：甘特图 ========== -->
+  <div id="step3" style="display:none;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+      <div>
+        <h2 style="font-size:20px;font-weight:700;" id="step3Title">排期甘特图</h2>
+        <p style="color:var(--text-secondary);font-size:13px;margin-top:2px;" id="step3Subtitle"></p>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-secondary btn-sm" onclick="goStep2()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          重新编辑
+        </button>
+        <div class="toolbar-divider"></div>
+        <button class="btn btn-secondary btn-sm" onclick="exportJSON()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          导出 JSON
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="showImportModal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          导入
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="copyShareLink()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          复制分享链接
+        </button>
+      </div>
+    </div>
+
+    <!-- 汇总卡片 -->
+    <div class="summary-cards" id="summaryCards"></div>
+
+    <!-- 甘特图容器 -->
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="gantt-wrapper" id="ganttWrapper">
+        <div class="gantt-container" id="ganttContainer"></div>
+      </div>
+    </div>
+
+    <!-- 图例 -->
+    <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--text-secondary);padding:0 4px;">
+      <div style="display:flex;align-items:center;gap:6px;"><div style="width:22px;height:10px;border-radius:3px;background:linear-gradient(90deg,#4f6ef7,#6683f8)"></div>开发阶段</div>
+      <div style="display:flex;align-items:center;gap:6px;"><div style="width:22px;height:10px;border-radius:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24)"></div>联调阶段</div>
+      <div style="display:flex;align-items:center;gap:6px;"><div style="width:22px;height:10px;border-radius:3px;background:linear-gradient(90deg,#22c55e,#34d399)"></div>测试阶段</div>
+      <div style="display:flex;align-items:center;gap:6px;"><div style="width:16px;height:10px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:2px"></div>周末/节假日</div>
+    </div>
+  </div>
+</div><!-- /.main -->
+
+<!-- ===== 导入模态框 ===== -->
+<div class="modal-overlay" id="importModal" onclick="closeImportModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">导入排期数据</div>
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">将之前导出的 JSON 数据粘贴到下方，点击导入加载排期。</p>
+    <textarea class="form-input" id="importJsonText" placeholder='{"projectName":"...","members":[...]}'></textarea>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeImportModal()">取消</button>
+      <button class="btn btn-primary" onclick="doImport()">导入</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Toast ===== -->
+<div class="toast" id="toast"></div>
+
+<!-- ===== JavaScript ===== -->
+<script>
+'use strict';
+
+// ============================================================
+// Part 1: 节假日数据（2025-2026 中国法定节假日）
+// ============================================================
+
+/** 法定节假日（放假，不上班） */
+const HOLIDAYS = new Set([
+  // 2025 元旦
+  '2025-01-01',
+  // 2025 春节 (1/28-2/4，共8天)
+  '2025-01-28','2025-01-29','2025-01-30','2025-01-31',
+  '2025-02-01','2025-02-02','2025-02-03','2025-02-04',
+  // 2025 清明
+  '2025-04-04','2025-04-05','2025-04-06',
+  // 2025 劳动节 (5/1-5)
+  '2025-05-01','2025-05-02','2025-05-03','2025-05-04','2025-05-05',
+  // 2025 端午 (5/31-6/2)
+  '2025-05-31','2025-06-01','2025-06-02',
+  // 2025 中秋 (10/6 与国庆连休)
+  '2025-10-06',
+  // 2025 国庆 (10/1-8)
+  '2025-10-01','2025-10-02','2025-10-03','2025-10-04',
+  '2025-10-05','2025-10-07','2025-10-08',
+  // 2026 元旦
+  '2026-01-01','2026-01-02','2026-01-03',
+  // 2026 春节 (2/17-23，共7天)
+  '2026-02-17','2026-02-18','2026-02-19','2026-02-20',
+  '2026-02-21','2026-02-22','2026-02-23',
+  // 2026 清明
+  '2026-04-04','2026-04-05','2026-04-06',
+  // 2026 劳动节 (5/1-5)
+  '2026-05-01','2026-05-02','2026-05-03','2026-05-04','2026-05-05',
+  // 2026 端午 (6/19-21)
+  '2026-06-19','2026-06-20','2026-06-21',
+  // 2026 中秋 (9/25-27)
+  '2026-09-25','2026-09-26','2026-09-27',
+  // 2026 国庆 (10/1-7)
+  '2026-10-01','2026-10-02','2026-10-03','2026-10-04',
+  '2026-10-05','2026-10-06','2026-10-07',
+]);
+
+/** 调休补班（周末需要上班的日期） */
+const WORKDAY_OVERRIDES = new Set([
+  // 2025
+  '2025-01-26', // 周日上班（春节前调休）
+  '2025-02-08', // 周六上班（春节后调休）
+  '2025-04-27', // 周日上班（劳动节调休）
+  '2025-09-28', // 周日上班（国庆前调休）
+  '2025-10-11', // 周六上班（国庆后调休）
+  // 2026
+  '2026-01-17', // 周六上班（元旦调休）
+  '2026-02-15', // 周日上班（春节前调休）
+  '2026-02-28', // 周六上班（春节后调休）
+  '2026-04-26', // 周日上班（劳动节调休）
+  '2026-10-10', // 周六上班（国庆后调休）
+]);
+
+// ============================================================
+// Part 2: 日期工具函数
+// ============================================================
+
+/** Date → 'YYYY-MM-DD' */
+function dateToStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+/** 'YYYY-MM-DD' → Date（本地时间，避免时区偏移） */
+function strToDate(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** 判断某天是否为工作日 */
+function isWorkday(d) {
+  const s = (typeof d === 'string') ? d : dateToStr(d);
+  if (HOLIDAYS.has(s)) return false;           // 法定节假日：非工作日
+  if (WORKDAY_OVERRIDES.has(s)) return true;   // 调休补班：工作日
+  const dow = strToDate(s).getDay();
+  return dow !== 0 && dow !== 6;               // 普通周一~五
+}
+
+/** 判断是否为周末或节假日（甘特图灰色背景用） */
+function isWeekendOrHoliday(s) {
+  return !isWorkday(s);
+}
+
+/**
+ * 从 startDateStr 起，向后推 n 个工作日。
+ * n=0 → 返回 startDate 本身（自动跳到最近工作日）
+ * n=1 → startDate 后的第 1 个工作日
+ */
+function addWorkdays(startDateStr, n) {
+  let d = strToDate(startDateStr);
+  // 先确保起点是工作日
+  while (!isWorkday(d)) d = new Date(d.getTime() + 86400000);
+  if (n === 0) return dateToStr(d);
+  let count = 0;
+  while (count < n) {
+    d = new Date(d.getTime() + 86400000);
+    if (isWorkday(d)) count++;
+  }
+  return dateToStr(d);
+}
+
+/**
+ * 从 startDateStr 起跨越 sp 个工作日（含首日）后的结束日期。
+ * sp=1 → 当天结束（只需 1 天）
+ * sp=5 → 共 5 个工作日
+ */
+function endDateFromSP(startDateStr, sp) {
+  if (!startDateStr || sp <= 0) return startDateStr;
+  // 先让 startDate 落到工作日
+  let d = strToDate(startDateStr);
+  while (!isWorkday(d)) d = new Date(d.getTime() + 86400000);
+  const realStart = dateToStr(d);
+  if (sp === 1) return realStart;
+  return addWorkdays(realStart, sp - 1);
+}
+
+/**
+ * 计算两个日期之间的工作日数（包含两端点）
+ */
+function workdaysBetween(startStr, endStr) {
+  let d = strToDate(startStr);
+  const end = strToDate(endStr);
+  let count = 0;
+  while (d <= end) {
+    if (isWorkday(d)) count++;
+    d = new Date(d.getTime() + 86400000);
+  }
+  return count;
+}
+
+/**
+ * 获取两个日期之间所有日期字符串数组（含两端点）
+ */
+function getDateRange(startStr, endStr) {
+  const dates = [];
+  let d = strToDate(startStr);
+  const end = strToDate(endStr);
+  while (d <= end) {
+    dates.push(dateToStr(d));
+    d = new Date(d.getTime() + 86400000);
+  }
+  return dates;
+}
+
+/**
+ * 计算联调起点 = 所有成员 devEndDate 中最晚的那个 + 1 个工作日
+ */
+function calcJointDebugStart(members) {
+  const ends = members.map(m => m.devEndDate).filter(Boolean);
+  if (!ends.length) return null;
+  const maxEnd = [...ends].sort().pop();
+  return addWorkdays(maxEnd, 1);
+}
+
+/** 格式化日期，附带星期 */
+function formatDate(s) {
+  if (!s) return '—';
+  const weeks = ['日','一','二','三','四','五','六'];
+  return `${s}（周${weeks[strToDate(s).getDay()]}）`;
+}
+
+/** 仅返回星期简称 */
+function weekOf(s) {
+  if (!s) return '';
+  const weeks = ['日','一','二','三','四','五','六'];
+  return `周${weeks[strToDate(s).getDay()]}`;
+}
+
+// ============================================================
+// Part 3: 状态管理
+// ============================================================
+
+const ROLE_CONFIG = {
+  backend:  { label: '后端',    icon: '⚙️',  color: '#6366f1' },
+  frontend: { label: '前端',    icon: '🖥️',  color: '#0ea5e9' },
+  ios:      { label: 'iOS',     icon: '📱',  color: '#8b5cf6' },
+  android:  { label: 'Android', icon: '🤖',  color: '#10b981' },
+  test:     { label: '测试',    icon: '🧪',  color: '#f59e0b' },
+};
+const ROLE_CLS = {
+  backend: 'role-backend', frontend: 'role-frontend',
+  ios: 'role-ios', android: 'role-android', test: 'role-test',
+};
+const SUFFIX = ['A','B','C','D','E','F'];
+
+let state = {
+  projectName: '',
+  reviewDate: '',
+  targetTestDate: '',
+  members: [],       // MemberConfig[]
+};
+
+function genId() {
+  return 'm_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+/** 添加一个新角色 */
+function addMember(role) {
+  const existing = state.members.filter(m => m.role === role);
+  const suffix = SUFFIX[existing.length] || String(existing.length + 1);
+  const cfg = ROLE_CONFIG[role];
+  const today = dateToStr(new Date());
+  const devStart = state.reviewDate || today;
+
+  const member = {
+    id: genId(),
+    role,
+    label: `${cfg.label}-${suffix}`,
+    dependencies: [],        // 依赖的其他成员 ID
+    devStartDate: devStart,
+    devSP: '',
+    devEndDate: '',
+    jointDebugDays: '',
+    testDays: role === 'test' ? '' : 0,
+    expanded: true,
+  };
+  state.members.push(member);
+  saveState();
+  renderMemberList();
+  updateJointDebugInfo();
+  checkGenerateBtn();
+}
+
+/** 删除角色 */
+function removeMember(id) {
+  state.members = state.members.filter(m => m.id !== id);
+  // 清理其他成员对该角色的依赖引用
+  state.members.forEach(m => {
+    m.dependencies = m.dependencies.filter(d => d !== id);
+  });
+  saveState();
+  renderMemberList();
+  updateJointDebugInfo();
+  checkGenerateBtn();
+}
+
+/** 更新成员某个字段 */
+function updateMember(id, field, value) {
+  const m = state.members.find(m => m.id === id);
+  if (!m) return;
+  m[field] = value;
+
+  // 联动计算：修改起始日期或SP → 重算完成日期（SP 必须有值才触发）
+  if (field === 'devStartDate' || field === 'devSP') {
+    if (m.devStartDate && m.devSP > 0) {
+      m.devEndDate = endDateFromSP(m.devStartDate, m.devSP);
+    } else if (!m.devSP) {
+      // SP 被清空时，同步清空完成日期
+      m.devEndDate = '';
+    }
+    const endEl = document.getElementById(`devEnd_${id}`);
+    if (endEl) endEl.value = m.devEndDate || '';
+  }
+
+  // 联动计算：手动修改完成日期 → 反算SP
+  if (field === 'devEndDate') {
+    if (m.devStartDate && m.devEndDate && m.devEndDate >= m.devStartDate) {
+      m.devSP = workdaysBetween(m.devStartDate, m.devEndDate);
+      const spEl = document.getElementById(`devSP_${id}`);
+      if (spEl) spEl.value = m.devSP;
+    }
+  }
+
+  saveState();
+  updateMemberSummary(id);
+  updateJointDebugInfo();
+  // 当开发起始日或完成日变化时，重新传播依赖顺延
+  if (field === 'devStartDate' || field === 'devSP' || field === 'devEndDate') {
+    recomputeAllDates();
+  }
+  checkGenerateBtn();
+}
+
+/**
+ * 环状依赖检测（DFS）
+ * 返回 true 表示存在环
+ */
+function hasCyclicDep(memberId, depId) {
+  // 模拟添加后检测：从 depId 出发，看能否沿依赖链到达 memberId
+  const visited = new Set();
+  function dfs(current) {
+    if (current === memberId) return true; // 回到了自身 → 环
+    if (visited.has(current)) return false;
+    visited.add(current);
+    const node = state.members.find(m => m.id === current);
+    if (!node) return false;
+    return node.dependencies.some(d => dfs(d));
+  }
+  return dfs(depId);
+}
+
+/**
+ * 根据当前依赖关系，计算某成员的最早可开始日期：
+ * 取所有依赖方的 devEndDate 中最晚的 +1 工作日
+ * 如果没有依赖，返回 null（由用户自己填）
+ */
+function calcEarliestStart(member) {
+  if (!member.dependencies.length) return null;
+  const depEnds = member.dependencies
+    .map(depId => state.members.find(m => m.id === depId))
+    .filter(dep => dep && dep.devEndDate)
+    .map(dep => dep.devEndDate);
+  if (!depEnds.length) return null;
+  const maxEnd = [...depEnds].sort().pop();
+  return addWorkdays(maxEnd, 1);
+}
+
+/**
+ * 重新计算所有成员的开始日期（拓扑排序，考虑依赖链）
+ * 只自动修正"由依赖推算出的最早开始日 > 当前填写开始日"的情况
+ */
+function recomputeAllDates() {
+  // 拓扑排序（Kahn 算法），保证按依赖顺序处理
+  const inDegree = {};
+  state.members.forEach(m => { inDegree[m.id] = 0; });
+  state.members.forEach(m => {
+    m.dependencies.forEach(depId => {
+      // 被 m 依赖的 depId 的"被依赖计数"不影响顺序，我们需要的是 m 自身的入度
+      inDegree[m.id] = (inDegree[m.id] || 0); // m 依赖别人 → m 的入度 +1
+    });
+  });
+  // 重新统计入度：谁被别人依赖，那个别人的入度与自己无关；
+  // m.dependencies = [A, B] 表示 m 依赖 A 和 B，A、B 要先完成
+  // → m 的入度 = m.dependencies.length（简化处理）
+  state.members.forEach(m => { inDegree[m.id] = m.dependencies.length; });
+
+  const queue = state.members.filter(m => inDegree[m.id] === 0).map(m => m.id);
+  const order = [];
+  const tempDegree = { ...inDegree };
+
+  while (queue.length) {
+    const cur = queue.shift();
+    order.push(cur);
+    // 找所有依赖 cur 的成员，减少其入度
+    state.members.forEach(m => {
+      if (m.dependencies.includes(cur)) {
+        tempDegree[m.id]--;
+        if (tempDegree[m.id] === 0) queue.push(m.id);
+      }
+    });
+  }
+
+  // 按拓扑顺序重算日期
+  order.forEach(id => {
+    const m = state.members.find(m => m.id === id);
+    if (!m) return;
+    const earliest = calcEarliestStart(m);
+    if (earliest && earliest > m.devStartDate) {
+      // 依赖链推算的最早开始日比当前填写的晚 → 自动顺延
+      m.devStartDate = earliest;
+      m.devEndDate   = endDateFromSP(m.devStartDate, m.devSP);
+      // 同步更新 UI
+      const startEl = document.getElementById(`devStart_${id}`);
+      const endEl   = document.getElementById(`devEnd_${id}`);
+      if (startEl) startEl.value = m.devStartDate;
+      if (endEl)   endEl.value   = m.devEndDate;
+      updateMemberSummary(id);
+    }
+  });
+}
+
+/** 切换依赖勾选 */
+function toggleDep(memberId, depId, checked) {
+  const m = state.members.find(m => m.id === memberId);
+  if (!m) return;
+
+  if (checked) {
+    // 环状依赖检测
+    if (hasCyclicDep(memberId, depId)) {
+      // 取消 checkbox 勾选状态
+      const cb = document.querySelector(`#depBox_${memberId} input[onchange*="${depId}"]`);
+      if (cb) cb.checked = false;
+      showToast('❌ 检测到环状依赖！请检查依赖关系配置', 3500);
+      return;
+    }
+    if (!m.dependencies.includes(depId)) m.dependencies.push(depId);
+  } else {
+    // 取消依赖：仅移除依赖关系，日期原地保留，提示用户手动调整
+    const depMember = state.members.find(m => m.id === depId);
+    const depName   = depMember ? depMember.label : '被依赖方';
+    m.dependencies  = m.dependencies.filter(d => d !== depId);
+    showToast(`已取消「${depName}」的依赖，当前开始日期不变，如需提前请手动调整`, 3500);
+  }
+
+  // 重新计算依赖顺延（取消时也需重算，避免其他依赖仍在约束）
+  recomputeAllDates();
+  updateJointDebugInfo();
+  checkGenerateBtn();
+  saveState();
+}
+
+/** 展开/折叠角色卡片 */
+function toggleMemberCard(id) {
+  const m = state.members.find(m => m.id === id);
+  if (!m) return;
+  m.expanded = !m.expanded;
+  const body = document.getElementById(`memberBody_${id}`);
+  const icon = document.getElementById(`collapseIcon_${id}`);
+  if (body) body.classList.toggle('collapsed', !m.expanded);
+  if (icon) icon.style.transform = m.expanded ? '' : 'rotate(-90deg)';
+}
+
+// ============================================================
+// Part 4: Firebase 实时协作 + 降级持久化（localStorage）
+// ============================================================
+
+// ---- ★ 在此填写你的 Firebase 配置 ----
+// 从 Firebase 控制台 → 项目设置 → 您的应用 → 复制 firebaseConfig
+// const FIREBASE_CONFIG = {
+//   apiKey:            "YOUR_API_KEY",
+//   authDomain:        "YOUR_PROJECT.firebaseapp.com",
+//   databaseURL:       "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+//   projectId:         "YOUR_PROJECT",
+//   storageBucket:     "YOUR_PROJECT.appspot.com",
+//   messagingSenderId: "YOUR_SENDER_ID",
+//   appId:             "YOUR_APP_ID",
+// };
+
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAFga63PZ_LKzxQGkxBv5mGaksmQdMAUR4",
+    authDomain: "schedule-tool-7f9f3.firebaseapp.com",
+    databaseURL: "https://schedule-tool-7f9f3-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "schedule-tool-7f9f3",
+    storageBucket: "schedule-tool-7f9f3.firebasestorage.app",
+    messagingSenderId: "31618212034",
+    appId: "1:31618212034:web:2488ab58f10d113eb7db5b",
+    measurementId: "G-BSGLSEQ55E"
+  };
+
+// ---- ★ 配置到此结束 ----
+
+const STORAGE_KEY   = 'scheduling_tool_v1';
+const FIREBASE_READY = FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
+
+let _db           = null;   // Firebase Database 实例
+let _roomId       = null;   // 当前房间 ID
+let _remoteUnsubscribe = null; // 取消监听函数
+let _ignoreNextRemote = false; // 防止本地写入触发自身回调
+
+/** 生成房间 ID：8 位随机字母数字 */
+function genRoomId() {
+  return Math.random().toString(36).slice(2, 6) + Math.random().toString(36).slice(2, 6);
+}
+
+/** 从 URL 参数读取房间 ID */
+function getRoomIdFromURL() {
+  return new URLSearchParams(location.search).get('room');
+}
+
+/** 将房间 ID 写入 URL（不刷新页面） */
+function setRoomIdInURL(roomId) {
+  const url = new URL(location.href);
+  url.searchParams.set('room', roomId);
+  url.hash = ''; // 清除旧的 hash 分享格式
+  history.replaceState(null, '', url.toString());
+}
+
+// ---- Firebase 初始化（动态 CDN 加载，保持单 HTML 文件）----
+function loadFirebaseSDK() {
+  return new Promise((resolve) => {
+    if (!FIREBASE_READY) { resolve(false); return; }
+    // 使用 compat 版本，支持直接 script 标签引入
+    const s1 = document.createElement('script');
+    s1.src = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js';
+    s1.onload = () => {
+      const s2 = document.createElement('script');
+      s2.src = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js';
+      s2.onload = () => resolve(true);
+      s2.onerror = () => resolve(false);
+      document.head.appendChild(s2);
+    };
+    s1.onerror = () => resolve(false);
+    document.head.appendChild(s1);
+  });
+}
+
+/** 初始化 Firebase，订阅房间数据 */
+async function initFirebase(roomId) {
+  const loaded = await loadFirebaseSDK();
+  if (!loaded) {
+    console.warn('[Firebase] SDK 加载失败，降级为本地模式');
+    updateSyncStatus('local');
+    return;
+  }
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    _db = firebase.database();
+    _roomId = roomId;
+
+    // 订阅房间数据变更
+    const roomRef = _db.ref(`rooms/${roomId}`);
+    _remoteUnsubscribe = roomRef.on('value', (snap) => {
+      if (_ignoreNextRemote) { _ignoreNextRemote = false; return; }
+      const data = snap.val();
+      if (data && Array.isArray(data.members)) {
+        applyState(data);
+        // 根据当前步骤刷新 UI
+        if (currentStep === 2) { renderMemberList(); updateJointDebugInfo(); checkGenerateBtn(); }
+        if (currentStep === 3) renderGantt();
+      }
+    });
+
+    updateSyncStatus('online', roomId);
+    console.log('[Firebase] 已连接房间:', roomId);
+  } catch(e) {
+    console.error('[Firebase] 连接失败:', e);
+    updateSyncStatus('error');
+  }
+}
+
+/** 向 Firebase 写入当前 state */
+async function pushToFirebase() {
+  if (!_db || !_roomId) return;
+  try {
+    _ignoreNextRemote = true;
+    await _db.ref(`rooms/${_roomId}`).set(state);
+  } catch(e) {
+    console.warn('[Firebase] 写入失败:', e);
+    _ignoreNextRemote = false;
+  }
+}
+
+/** saveState：同时写本地 + Firebase */
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
+  pushToFirebase(); // 异步，不阻塞 UI
+}
+
+// ---- 同步状态指示器 ----
+function updateSyncStatus(status, roomId) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  const map = {
+    local:   { text: '📁 本地模式',       color: '#64748b' },
+    online:  { text: '🟢 实时协作中',     color: '#22c55e' },
+    error:   { text: '🔴 连接失败',        color: '#ef4444' },
+    loading: { text: '⏳ 连接中…',         color: '#f59e0b' },
+  };
+  const cfg = map[status] || map.local;
+  el.textContent = cfg.text + (roomId ? `  房间: ${roomId}` : '');
+  el.style.color = cfg.color;
+}
+
+// ---- 房间操作 ----
+/** 新建房间：生成 roomId，写入 URL，推送当前数据 */
+async function createRoom() {
+  const roomId = genRoomId();
+  setRoomIdInURL(roomId);
+  updateSyncStatus('loading');
+  await initFirebase(roomId);
+  saveState(); // 立即推送当前数据
+  showToast('✅ 协作房间已创建，分享链接给队友', 3500);
+}
+
+/** 加入现有房间（从 URL 参数） */
+async function joinRoom(roomId) {
+  updateSyncStatus('loading');
+  await initFirebase(roomId);
+}
+
+/** 复制协作链接 */
+function copyShareLink() {
+  let url;
+  if (_roomId) {
+    // 协作模式：复制带 room 参数的链接
+    const u = new URL(location.href);
+    u.searchParams.set('room', _roomId);
+    url = u.toString();
+  } else {
+    // 降级：URL hash 模式
+    url = `${location.origin}${location.pathname}#${encodeURIComponent(btoa(JSON.stringify(state)))}`;
+  }
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() =>
+      showToast(_roomId ? '✅ 协作链接已复制，队友打开即可实时协作' : '✅ 分享链接已复制', 3500)
+    );
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = url; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('✅ 链接已复制');
+  }
+}
+
+// ---- 其余持久化函数保持不变 ----
+function loadState() {
+  // 优先从 URL hash 恢复（旧格式兼容）
+  if (location.hash && location.hash.length > 2 && !getRoomIdFromURL()) {
+    try {
+      const data = JSON.parse(atob(decodeURIComponent(location.hash.slice(1))));
+      if (data && Array.isArray(data.members)) { applyState(data); return true; }
+    } catch(e) {}
+  }
+  // 从 localStorage 恢复
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const data = JSON.parse(saved);
+      if (data && Array.isArray(data.members)) { applyState(data); return false; }
+    }
+  } catch(e) {}
+  return false;
+}
+
+function applyState(data) {
+  state = { projectName: '', reviewDate: '', targetTestDate: '', members: [], ...data };
+  document.getElementById('projectName').value    = state.projectName    || '';
+  document.getElementById('reviewDate').value     = state.reviewDate     || '';
+  document.getElementById('targetTestDate').value = state.targetTestDate || '';
+}
+
+function exportJSON() {
+  const json = JSON.stringify(state, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `排期_${state.projectName || '未命名'}_${dateToStr(new Date())}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('✅ 已导出 JSON 文件');
+}
+
+function showImportModal() {
+  document.getElementById('importModal').classList.add('show');
+  document.getElementById('importJsonText').value = '';
+  setTimeout(() => document.getElementById('importJsonText').focus(), 200);
+}
+
+function closeImportModal(e) {
+  if (e && e.target !== document.getElementById('importModal')) return;
+  document.getElementById('importModal').classList.remove('show');
+}
+
+function doImport() {
+  const text = document.getElementById('importJsonText').value.trim();
+  if (!text) { showToast('请粘贴 JSON 数据'); return; }
+  try {
+    const data = JSON.parse(text);
+    if (!Array.isArray(data.members)) throw new Error('格式错误');
+    applyState(data);
+    document.getElementById('importModal').classList.remove('show');
+    showToast('导入成功，正在生成甘特图…');
+    setTimeout(generateGantt, 300);
+  } catch(e) {
+    showToast('❌ JSON 格式错误，请检查后重试');
+  }
+}
+
+// Toast 通知
+let _toastTimer;
+function showToast(msg, ms = 2800) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+// ============================================================
+// Part 5: 步骤跳转
+// ============================================================
+
+let currentStep = 1;
+
+function updateStepIndicators() {
+  [1, 2, 3].forEach(i => {
+    const el = document.getElementById(`stepIndicator${i}`);
+    el.className = 'step';
+    if (i < currentStep) el.classList.add('done');
+    else if (i === currentStep) el.classList.add('active');
+    // 步骤连接线染色
+    const line = document.getElementById(`stepLine${i}`);
+    if (line) line.style.background = i < currentStep ? 'var(--success)' : 'var(--border)';
+  });
+}
+
+function goStep1() {
+  currentStep = 1;
+  document.getElementById('step1').style.display = '';
+  document.getElementById('step2').style.display = 'none';
+  document.getElementById('step3').style.display = 'none';
+  updateStepIndicators();
+}
+
+function goStep2() {
+  const name = document.getElementById('projectName').value.trim();
+  if (!name) {
+    showToast('⚠️ 请先填写需求名称');
+    document.getElementById('projectName').focus();
+    return;
+  }
+  state.projectName    = name;
+  state.reviewDate     = document.getElementById('reviewDate').value;
+  state.targetTestDate = document.getElementById('targetTestDate').value;
+  saveState();
+
+  currentStep = 2;
+  document.getElementById('step1').style.display = 'none';
+  document.getElementById('step2').style.display = '';
+  document.getElementById('step3').style.display = 'none';
+  document.getElementById('step2Title').textContent = `配置参与角色 — ${state.projectName}`;
+  updateStepIndicators();
+  renderMemberList();
+  updateJointDebugInfo();
+  checkGenerateBtn();
+}
+
+function generateGantt() {
+  if (!state.members.length) { showToast('⚠️ 请至少添加一个参与角色'); return; }
+  currentStep = 3;
+  document.getElementById('step1').style.display = 'none';
+  document.getElementById('step2').style.display = 'none';
+  document.getElementById('step3').style.display = '';
+  document.getElementById('step3Title').textContent    = `排期甘特图 — ${state.projectName}`;
+  document.getElementById('step3Subtitle').textContent =
+    `评审日期：${state.reviewDate || '未填写'} · 参与角色：${state.members.length} 人`;
+  updateStepIndicators();
+  saveState();
+  renderGantt();
+}
+
+function checkGenerateBtn() {
+  const ok = state.members.length > 0 &&
+             state.members.every(m => m.devStartDate && m.devEndDate);
+  document.getElementById('generateBtn').disabled = !ok;
+}
+
+// ============================================================
+// Part 6: 步骤2 - 角色卡片渲染
+// ============================================================
+
+function renderMemberList() {
+  const listEl  = document.getElementById('memberList');
+  const emptyEl = document.getElementById('memberEmptyState');
+  listEl.innerHTML = '';
+
+  if (!state.members.length) {
+    emptyEl.style.display = '';
+    document.getElementById('jointDebugInfo').style.display = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  state.members.forEach(member => {
+    const cfg = ROLE_CONFIG[member.role];
+    const cls = ROLE_CLS[member.role];
+    const others = state.members.filter(m => m.id !== member.id);
+
+    const card = document.createElement('div');
+    card.className = `member-card ${cls}`;
+    card.id = `memberCard_${member.id}`;
+
+    // ---- 依赖区域 HTML ----
+    let depHTML = '';
+    if (others.length > 0) {
+      depHTML = `
+        <div style="margin-bottom:14px;">
+          <div class="dep-section-title">🔗 开发阶段依赖（勾选后需等依赖方完成才能开始）</div>
+          <div class="dep-checkboxes" id="depBox_${member.id}">
+            ${others.map(o => `
+              <label class="dep-checkbox-item">
+                <input type="checkbox"
+                  ${member.dependencies.includes(o.id) ? 'checked' : ''}
+                  onchange="toggleDep('${member.id}','${o.id}',this.checked)">
+                <span>${ROLE_CONFIG[o.role].icon} ${o.label}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+        <div class="divider"></div>
+      `;
+    }
+
+    // ---- 测试天数行（仅测试角色显示） ----
+    const testDaysHTML = member.role === 'test' ? `
+      <div class="form-group">
+        <label class="form-label">测试天数（工作日）</label>
+        <input type="number" class="form-input form-input-sm" id="testDays_${member.id}"
+          value="${member.testDays}" min="1" max="120"
+          onchange="updateMember('${member.id}','testDays',parseInt(this.value)||1)">
+      </div>
+    ` : '<div></div>';
+
+    card.innerHTML = `
+      <!-- 卡片头部 -->
+      <div class="member-card-header" onclick="toggleMemberCard('${member.id}')">
+        <div class="member-card-header-left">
+          <svg id="collapseIcon_${member.id}" width="16" height="16" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;transition:transform 0.2s;${member.expanded?'':'transform:rotate(-90deg)'}">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+          <span style="font-size:18px;line-height:1;">${cfg.icon}</span>
+          <input type="text" class="member-name-input"
+            id="memberLabel_${member.id}"
+            value="${member.label}"
+            title="点击编辑名称"
+            onclick="event.stopPropagation()"
+            onchange="updateMember('${member.id}','label',this.value)">
+          <span class="member-role-badge role-badge-bg"
+            style="--rc:${cfg.color};">${cfg.label}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="member-summary" id="memberSummary_${member.id}"></div>
+          <button class="btn btn-danger-ghost" title="删除角色"
+            onclick="event.stopPropagation();removeMember('${member.id}')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 卡片内容 -->
+      <div class="member-card-body ${member.expanded ? '' : 'collapsed'}"
+           id="memberBody_${member.id}">
+        ${depHTML}
+
+        <!-- 开发时间 -->
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">开发开始日期 <span style="color:var(--danger)">*</span></label>
+            <input type="date" class="form-input form-input-sm"
+              id="devStart_${member.id}" value="${member.devStartDate}"
+              onchange="updateMember('${member.id}','devStartDate',this.value)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">SP 数（工作日天数）</label>
+            <input type="number" class="form-input form-input-sm"
+              id="devSP_${member.id}" value="${member.devSP}" min="1" max="200"
+              onchange="updateMember('${member.id}','devSP',parseInt(this.value)||1)">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:4px;">
+              开发完成日期
+              <span style="font-size:10px;color:var(--text-secondary);font-weight:400;">(自动/可覆盖)</span>
+            </label>
+            <input type="date" class="form-input form-input-sm"
+              id="devEnd_${member.id}" value="${member.devEndDate}"
+              title="手动修改后会自动反算 SP 数"
+              onchange="updateMember('${member.id}','devEndDate',this.value)">
+          </div>
+        </div>
+
+        <!-- 联调 + 测试 -->
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">联调天数（工作日）</label>
+            <input type="number" class="form-input form-input-sm"
+              id="jdDays_${member.id}" value="${member.jointDebugDays}" min="0" max="60"
+              onchange="updateMember('${member.id}','jointDebugDays',parseInt(this.value)||0)">
+          </div>
+          ${testDaysHTML}
+        </div>
+
+        <div style="font-size:12px;color:var(--text-secondary);padding:8px 10px;background:var(--primary-light);border-radius:var(--radius-sm);">
+          💡 联调起点由所有角色的最晚开发完成日期统一决定，联调期间各端同步进行
+        </div>
+      </div>
+    `;
+
+    listEl.appendChild(card);
+    updateMemberSummary(member.id);
+  });
+}
+
+/** 更新卡片头部的摘要信息 */
+function updateMemberSummary(id) {
+  const m  = state.members.find(m => m.id === id);
+  const el = document.getElementById(`memberSummary_${id}`);
+  if (!m || !el) return;
+  if (m.devStartDate && m.devEndDate) {
+    el.innerHTML = `
+      <span class="member-summary-item">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4f6ef7;"></span>
+        ${m.devStartDate} ~ ${m.devEndDate}&nbsp;<span style="color:var(--primary);font-weight:600;">(${m.devSP}SP)</span>
+      </span>`;
+  } else {
+    el.innerHTML = '';
+  }
+}
+
+/** 更新联调起点提示栏 */
+function updateJointDebugInfo() {
+  const jdInfoEl  = document.getElementById('jointDebugInfo');
+  const displayEl = document.getElementById('jointDebugStartDisplay');
+  const descEl    = document.getElementById('jointDebugStartDesc');
+
+  const valid = state.members.filter(m => m.devEndDate);
+  if (!valid.length) { jdInfoEl.style.display = 'none'; return; }
+
+  const jdStart = calcJointDebugStart(valid);
+  if (!jdStart) { jdInfoEl.style.display = 'none'; return; }
+
+  jdInfoEl.style.display = '';
+  displayEl.textContent  = formatDate(jdStart);
+
+  const maxEnd    = [...valid.map(m => m.devEndDate)].sort().pop();
+  const lastMember = valid.find(m => m.devEndDate === maxEnd);
+  descEl.textContent = lastMember
+    ? `（最晚完成：${lastMember.label} ${maxEnd}）`
+    : '';
+}
+
+// ============================================================
+// Part 7: 甘特图渲染
+// ============================================================
+
+const CELL_W = 32; // 每天宽度 px
+
+function renderGantt() {
+  const members = state.members;
+
+  // 1. 计算联调起始/结束
+  const jdStart = calcJointDebugStart(members);
+  members.forEach(m => {
+    m._jdStart = jdStart;
+    m._jdEnd   = (jdStart && m.jointDebugDays > 0)
+                   ? endDateFromSP(jdStart, m.jointDebugDays)
+                   : null;
+  });
+
+  // 2. 计算测试阶段（由测试工程师的 testDays 决定）
+  const testMembers = members.filter(m => m.role === 'test' && m.testDays > 0);
+  let testStart = null, testEnd = null;
+  if (testMembers.length > 0 && jdStart) {
+    // 测试起点 = 所有角色联调结束最晚的 + 1 个工作日
+    const jdEnds = members.map(m => m._jdEnd).filter(Boolean);
+    if (jdEnds.length) {
+      const maxJdEnd = [...jdEnds].sort().pop();
+      testStart = addWorkdays(maxJdEnd, 1);
+      const maxTestDays = Math.max(...testMembers.map(m => m.testDays));
+      testEnd = endDateFromSP(testStart, maxTestDays);
+    }
+  }
+
+  // 3. 计算日期轴范围（多留 5 个工作日缓冲）
+  const allDates = [
+    ...members.map(m => m.devStartDate),
+    ...members.map(m => m.devEndDate),
+    ...members.map(m => m._jdEnd),
+    testEnd,
+  ].filter(Boolean).sort();
+  if (!allDates.length) return;
+
+  const axisStart = allDates[0];
+  const axisEnd   = addWorkdays(allDates[allDates.length - 1], 5);
+  const dates     = getDateRange(axisStart, axisEnd);
+  const todayStr  = dateToStr(new Date());
+
+  // 4. 渲染汇总卡片
+  renderSummary(jdStart, testStart, testEnd);
+
+  // 5. 构建甘特图 DOM
+  const container = document.getElementById('ganttContainer');
+  const totalW    = 130 + dates.length * CELL_W;
+  container.style.width = totalW + 'px';
+
+  // ---- 辅助：返回背景格 HTML（周末/节假日灰色，今日蓝线）----
+  function bgCellsHTML() {
+    return dates.map((d, i) => {
+      const isWH = isWeekendOrHoliday(d);
+      const isToday = d === todayStr;
+      let cls = 'gantt-cell-bg';
+      if (isWH) cls += ' weekend-bg';
+      if (isToday) cls += ' today-line';
+      return `<div class="${cls}" style="left:${i * CELL_W}px;width:${CELL_W}px;" ${isToday ? 'title="今天"' : ''}></div>`;
+    }).join('');
+  }
+
+  // ---- 辅助：返回一根 Bar 的 HTML ----
+  function barHTML(startStr, endStr, barCls, label) {
+    if (!startStr || !endStr) return '';
+    const si = dates.indexOf(startStr);
+    const ei = dates.indexOf(endStr);
+    // 如果日期不在轴范围内，做截断处理
+    const s = si >= 0 ? si : 0;
+    const e = ei >= 0 ? ei : dates.length - 1;
+    if (s > dates.length - 1) return '';
+    const left  = s * CELL_W;
+    const width = Math.max((e - s + 1) * CELL_W - 2, 8);
+    return `<div class="gantt-bar ${barCls}" style="left:${left}px;width:${width}px;"
+              title="${label}：${startStr} ~ ${endStr}">${width > 40 ? label : ''}</div>`;
+  }
+
+  // ---- Header ----
+  let headerHTML = `
+    <div class="gantt-header">
+      <div class="gantt-label-col" style="width:130px;min-width:130px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--text-secondary);">角色</div>
+      <div style="flex:1;display:flex;">
+  `;
+  dates.forEach((d, i) => {
+    const dt  = strToDate(d);
+    const day = dt.getDate();
+    const dow = dt.getDay();
+    const m   = dt.getMonth() + 1;
+    const weeks = ['日','一','二','三','四','五','六'];
+    const isWH    = isWeekendOrHoliday(d);
+    const isToday = d === todayStr;
+    let cls = 'gantt-date-cell';
+    if (isToday) cls += ' today-col';
+    else if (isWH) cls += ' weekend';
+    // 月份标签：每月1号 或 轴的第一天 才显示
+    const monthLabel = (day === 1 || i === 0) ? `${m}月` : '';
+    headerHTML += `
+      <div class="${cls}" style="width:${CELL_W}px;min-width:${CELL_W}px;">
+        <div class="dc-month">${monthLabel}</div>
+        <div class="dc-day">${day}</div>
+        <div class="dc-week">${weeks[dow]}</div>
+      </div>`;
+  });
+  headerHTML += `</div></div>`;
+
+  // ---- Body rows（每个成员一行）----
+  let bodyHTML = '<div class="gantt-body">';
+
+  members.forEach(m => {
+    const cfg = ROLE_CONFIG[m.role];
+    bodyHTML += `
+      <div class="gantt-row">
+        <div class="gantt-label-col" style="width:130px;min-width:130px;">
+          <span style="font-size:15px;flex-shrink:0;">${cfg.icon}</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${m.label}">${m.label}</span>
+        </div>
+        <div class="gantt-bars">
+          ${bgCellsHTML()}
+          ${barHTML(m.devStartDate, m.devEndDate, 'gantt-bar-dev', '开发')}
+          ${m._jdStart && m._jdEnd ? barHTML(m._jdStart, m._jdEnd, 'gantt-bar-jd', '联调') : ''}
+        </div>
+      </div>`;
+  });
+
+  // ---- 测试行（如有测试工程师）----
+  if (testStart && testEnd) {
+    const maxDays = Math.max(...testMembers.map(m => m.testDays));
+    bodyHTML += `
+      <div class="gantt-row test-row">
+        <div class="gantt-label-col" style="width:130px;min-width:130px;">
+          <span style="font-size:15px;">🧪</span>
+          <span>测试阶段</span>
+        </div>
+        <div class="gantt-bars">
+          ${bgCellsHTML()}
+          ${barHTML(testStart, testEnd, 'gantt-bar-test', `测试(${maxDays}天)`)}
+        </div>
+      </div>`;
+  }
+
+  bodyHTML += '</div>';
+  container.innerHTML = headerHTML + bodyHTML;
+}
+
+// ============================================================
+// Part 8: 汇总卡片渲染
+// ============================================================
+
+function renderSummary(jdStart, testStart, testEnd) {
+  const members = state.members;
+
+  const allDevStarts = members.map(m => m.devStartDate).filter(Boolean).sort();
+  const allDevEnds   = members.map(m => m.devEndDate).filter(Boolean).sort();
+  const allJdEnds    = members.map(m => m._jdEnd).filter(Boolean).sort();
+
+  const devStart = allDevStarts[0]                          || null;
+  const devEnd   = allDevEnds[allDevEnds.length - 1]        || null;
+  const jdEnd    = allJdEnds[allJdEnds.length - 1]          || null;
+
+  // 总工期：从开发开始 → 测试完成（或联调完成）
+  const finalEnd   = testEnd || jdEnd || devEnd;
+  const totalDays  = (devStart && finalEnd) ? workdaysBetween(devStart, finalEnd) : null;
+
+  // 目标提测对比
+  let targetLabel = null, targetSub = null;
+  if (state.targetTestDate && testStart) {
+    const diff = workdaysBetween(
+      testStart < state.targetTestDate ? testStart : state.targetTestDate,
+      testStart < state.targetTestDate ? state.targetTestDate : testStart
+    );
+    if (testStart <= state.targetTestDate) {
+      targetSub = `提前 ${diff} 个工作日 ✅`;
+    } else {
+      targetSub = `超期 ${diff} 个工作日 ⚠️`;
+    }
+    targetLabel = state.targetTestDate;
+  }
+
+  const cards = [
+    { label: '开发开始', value: devStart || '—', sub: devStart ? weekOf(devStart) : '' },
+    { label: '开发完成', value: devEnd   || '—', sub: devEnd   ? weekOf(devEnd)   : '' },
+    { label: '联调开始', value: jdStart  || '—', sub: jdStart  ? weekOf(jdStart)  : '' },
+    { label: '联调完成', value: jdEnd    || '—', sub: jdEnd    ? weekOf(jdEnd)    : '' },
+  ];
+  if (testStart) cards.push({ label: '提测日期', value: testStart, sub: weekOf(testStart) });
+  if (testEnd)   cards.push({ label: '测试完成', value: testEnd,   sub: weekOf(testEnd)   });
+  if (testEnd)   cards.push({ label: '🔒 封版日期', value: testEnd, sub: '与测试完成同天', highlight: true });
+  if (targetLabel) cards.push({ label: '目标提测', value: targetLabel, sub: targetSub });
+  cards.push({ label: '总工期', value: totalDays ? `${totalDays} 天` : '—', sub: '工作日' });
+
+  document.getElementById('summaryCards').innerHTML = cards.map(c => `
+    <div class="summary-card" ${c.highlight ? 'style="border-color:#8b5cf6;background:linear-gradient(135deg,#faf5ff,#f3e8ff);"' : ''}>
+      <div class="sc-label" ${c.highlight ? 'style="color:#7c3aed;"' : ''}>${c.label}</div>
+      <div class="sc-value" style="font-size:${c.value && c.value.length > 10 ? '13px' : ''};${c.highlight ? 'color:#6d28d9;' : ''}">${c.value}</div>
+      ${c.sub ? `<div class="sc-sub" ${c.highlight ? 'style="color:#7c3aed;font-weight:500;"' : ''}>${c.sub}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+// ============================================================
+// Part 9: 初始化入口
+// ============================================================
+
+function init() {
+  // 默认将今天设为评审日期
+  document.getElementById('reviewDate').value = dateToStr(new Date());
+
+  // 配置了 Firebase 才显示「开启协作」按钮
+  if (FIREBASE_READY) {
+    const btn = document.getElementById('createRoomBtn');
+    if (btn) btn.style.display = '';
+  }
+
+  const roomIdFromURL = getRoomIdFromURL();
+
+  if (roomIdFromURL) {
+    // 从协作链接进入：加载远端数据
+    _roomId = roomIdFromURL;
+    joinRoom(roomIdFromURL);
+  } else {
+    // 普通进入：尝试本地恢复
+    const fromHash = loadState();
+    if (fromHash && state.members && state.members.length > 0) {
+      setTimeout(() => generateGantt(), 100);
+    }
+    updateSyncStatus('local');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
