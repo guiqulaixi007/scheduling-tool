@@ -864,6 +864,7 @@ function addMember(role, customOpts) {
     testDays: role === 'test' ? '' : 0,
     onlineDate: '',      // 后端上线日期（非必填）
     publishDate: '',     // 前端发布日期（非必填）
+    freezeDate: '',      // iOS/Android 封版时间（非必填）
     expanded: true,
   };
   state.members.push(member);
@@ -1330,6 +1331,7 @@ function applyState(data) {
         testDays: m.testDays ?? (m.role === 'test' ? '' : 0),
         onlineDate: m.onlineDate ?? '',
         publishDate: m.publishDate ?? '',
+        freezeDate: m.freezeDate ?? '',
         expanded: m.expanded ?? true,
         ...m,
       }))
@@ -1637,6 +1639,20 @@ function renderMemberList() {
           </div>
           <div class="form-group"></div>
         </div>` : ''}
+        ${(member.role === 'ios' || member.role === 'android') ? `
+        <!-- 客户端封版时间 -->
+        <div class="form-row" style="margin-top:8px;">
+          <div class="form-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:4px;">
+              🔒 封版时间
+              <span style="font-size:10px;color:var(--text-secondary);font-weight:400;">（非必填，不填将默认测试完成后第1个工作日）</span>
+            </label>
+            <input type="date" class="form-input form-input-sm"
+              id="freezeDate_${member.id}" value="${member.freezeDate || ''}"
+              onchange="updateMember('${member.id}','freezeDate',this.value)">
+          </div>
+          <div class="form-group"></div>
+        </div>` : ''}
 
         <div style="font-size:12px;color:var(--text-secondary);padding:8px 10px;background:var(--primary-light);border-radius:var(--radius-sm);">
           💡 联调起点由所有角色最晚开发完成日期统一决定；联调天数填 0 表示该角色不参与联调
@@ -1917,16 +1933,19 @@ function renderGantt() {
     const isTest = m.role === 'test';
     const barCls  = isTest ? 'gantt-bar-test' : 'gantt-bar-dev';
     const barLabel = isTest ? '测试' : '开发';
-    // 里程碑 bar：后端上线 / 前端发布 / 客户端封版
+    // 交付节点 bar：后端上线 / 前端发布 / 客户端封版
     let milestoneBarHTML = '';
     if (m.role === 'backend' && m.onlineDate) {
-      milestoneBarHTML += barHTML(m.onlineDate, m.onlineDate, 'gantt-bar-milestone-online', '上线');
+      milestoneBarHTML += barHTML(m.onlineDate, m.onlineDate, 'gantt-bar-milestone-online', '交付-上线');
     }
     if (m.role === 'frontend' && m.publishDate) {
-      milestoneBarHTML += barHTML(m.publishDate, m.publishDate, 'gantt-bar-milestone-publish', '发布');
+      milestoneBarHTML += barHTML(m.publishDate, m.publishDate, 'gantt-bar-milestone-publish', '交付-发布');
     }
-    if ((m.role === 'ios' || m.role === 'android') && m.devEndDate) {
-      milestoneBarHTML += barHTML(m.devEndDate, m.devEndDate, 'gantt-bar-milestone-freeze', '封版');
+    if (m.role === 'ios' || m.role === 'android') {
+      const finalFreezeDate = m.freezeDate || (testEnd ? addWorkdays(testEnd, 1) : '');
+      if (finalFreezeDate) {
+        milestoneBarHTML += barHTML(finalFreezeDate, finalFreezeDate, 'gantt-bar-milestone-freeze', '交付-封版');
+      }
     }
     bodyHTML += `
       <div class="gantt-row${isTest ? ' test-row' : ''}">
@@ -1996,10 +2015,20 @@ function renderSummary(jdStart, testStart, testEnd) {
   members.filter(m => m.role === 'frontend' && m.publishDate).forEach(m =>
     dateCards.push({ label: `${m.label} 发布`, value: m.publishDate, sub: weekOf(m.publishDate), color: 'publish' })
   );
-  // iOS/Android 封版节点（用 devEndDate 作为封版日期）
-  members.filter(m => (m.role === 'ios' || m.role === 'android') && m.devEndDate).forEach(m =>
-    dateCards.push({ label: `${m.label} 封版`, value: m.devEndDate, sub: weekOf(m.devEndDate), color: 'freeze' })
-  );
+
+  // 客户端封版节点：优先用户选择 freezeDate，否则默认测试完成后第1个工作日
+  const iosMember = members.find(m => m.role === 'ios');
+  const androidMember = members.find(m => m.role === 'android');
+  const defaultFreezeDate = testEnd ? addWorkdays(testEnd, 1) : '';
+  const iosFreeze = iosMember ? (iosMember.freezeDate || defaultFreezeDate) : '';
+  const androidFreeze = androidMember ? (androidMember.freezeDate || defaultFreezeDate) : '';
+
+  if (iosFreeze && androidFreeze && iosFreeze === androidFreeze) {
+    dateCards.push({ label: '客户端封版', value: iosFreeze, sub: weekOf(iosFreeze), color: 'freeze' });
+  } else {
+    if (iosFreeze) dateCards.push({ label: 'iOS 封版', value: iosFreeze, sub: weekOf(iosFreeze), color: 'freeze' });
+    if (androidFreeze) dateCards.push({ label: 'Android 封版', value: androidFreeze, sub: weekOf(androidFreeze), color: 'freeze' });
+  }
 
   // 按日期排序（升序），没有日期的排到末尾
   dateCards.sort((a, b) => {
