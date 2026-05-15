@@ -792,10 +792,11 @@ function updateMember(id, field, value) {
   m[field] = value;
 
   // 联动计算：修改起始日期或SP → 重算完成日期（SP 必须有值才触发）
-  if (field === 'devStartDate' || field === 'devSP') {
-    if (m.devStartDate && m.devSP > 0) {
-      m.devEndDate = endDateFromSP(m.devStartDate, m.devSP);
-    } else if (!m.devSP) {
+  if (field === 'devStartDate' || field === 'devSP' || field === 'testDays') {
+    const duration = m.role === 'test' ? m.testDays : m.devSP;
+    if (m.devStartDate && duration > 0) {
+      m.devEndDate = endDateFromSP(m.devStartDate, duration);
+    } else if (!duration) {
       // SP 被清空时，同步清空完成日期
       m.devEndDate = '';
     }
@@ -806,9 +807,16 @@ function updateMember(id, field, value) {
   // 联动计算：手动修改完成日期 → 反算SP
   if (field === 'devEndDate') {
     if (m.devStartDate && m.devEndDate && m.devEndDate >= m.devStartDate) {
-      m.devSP = workdaysBetween(m.devStartDate, m.devEndDate);
-      const spEl = document.getElementById(`devSP_${id}`);
-      if (spEl) spEl.value = m.devSP;
+      const days = workdaysBetween(m.devStartDate, m.devEndDate);
+      if (m.role === 'test') {
+        m.testDays = days;
+        const spEl = document.getElementById(`testDays_${id}`);
+        if (spEl) spEl.value = m.testDays;
+      } else {
+        m.devSP = days;
+        const spEl = document.getElementById(`devSP_${id}`);
+        if (spEl) spEl.value = m.devSP;
+      }
     }
   }
 
@@ -1330,7 +1338,7 @@ function renderMemberList() {
     if (others.length > 0) {
       depHTML = `
         <div style="margin-bottom:14px;">
-          <div class="dep-section-title">🔗 开发阶段依赖（勾选后需等依赖方完成才能开始）</div>
+          <div class="dep-section-title">🔗 ${member.role === 'test' ? '测试阶段依赖（勾选后需等依赖方完成才能开始测试）' : '开发阶段依赖（勾选后需等依赖方完成才能开始）'}</div>
           <div class="dep-checkboxes" id="depBox_${member.id}">
             ${others.map(o => `
               <label class="dep-checkbox-item">
@@ -1346,15 +1354,7 @@ function renderMemberList() {
       `;
     }
 
-    // ---- 测试天数行（测试角色显示，其他角色隐藏） ----
-    const testDaysHTML = member.role === 'test' ? `
-      <div class="form-group">
-        <label class="form-label">测试天数（工作日）</label>
-        <input type="number" class="form-input form-input-sm" id="testDays_${member.id}"
-          value="${member.testDays}" min="1" max="120"
-          onchange="updateMember('${member.id}','testDays',parseInt(this.value)||1)">
-      </div>
-    ` : '<div></div>';
+    // 测试角色在统一的 SP 区域中展示“测试SP”，这里不再单独渲染
 
     card.innerHTML = `
       <!-- 卡片头部 -->
@@ -1391,23 +1391,17 @@ function renderMemberList() {
            id="memberBody_${member.id}">
         ${depHTML}
 
-        <!-- 开发时间 -->
-        <div class="form-row-3">
+        <!-- 阶段时间 -->
+        <div class="form-row">
           <div class="form-group">
-            <label class="form-label">开发开始日期 <span style="color:var(--danger)">*</span></label>
+            <label class="form-label">${member.role === 'test' ? '开始测试日期' : '开始开发日期'} <span style="color:var(--danger)">*</span></label>
             <input type="date" class="form-input form-input-sm"
               id="devStart_${member.id}" value="${member.devStartDate}"
               onchange="updateMember('${member.id}','devStartDate',this.value)">
           </div>
           <div class="form-group">
-            <label class="form-label">SP 数（工作日天数）</label>
-            <input type="number" class="form-input form-input-sm"
-              id="devSP_${member.id}" value="${member.devSP}" min="1" max="200"
-              onchange="updateMember('${member.id}','devSP',parseInt(this.value)||1)">
-          </div>
-          <div class="form-group">
             <label class="form-label" style="display:flex;align-items:center;gap:4px;">
-              开发完成日期
+              ${member.role === 'test' ? '测试完成日期' : '开发完成日期'}
               <span style="font-size:10px;color:var(--text-secondary);font-weight:400;">(自动/可覆盖)</span>
             </label>
             <input type="date" class="form-input form-input-sm"
@@ -1417,15 +1411,21 @@ function renderMemberList() {
           </div>
         </div>
 
-        <!-- 联调 + 测试 -->
+        <!-- SP 信息 -->
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">联调天数（工作日）</label>
+            <label class="form-label">${member.role === 'test' ? '测试SP' : '开发SP'}</label>
+            <input type="number" class="form-input form-input-sm"
+              id="${member.role === 'test' ? 'testDays' : 'devSP'}_${member.id}"
+              value="${member.role === 'test' ? member.testDays : member.devSP}" min="1" max="200"
+              onchange="updateMember('${member.id}','${member.role === 'test' ? 'testDays' : 'devSP'}',parseInt(this.value)||'')">
+          </div>
+          <div class="form-group">
+            <label class="form-label">联调SP</label>
             <input type="number" class="form-input form-input-sm"
               id="jdDays_${member.id}" value="${member.jointDebugDays}" min="0" max="60"
               onchange="updateMember('${member.id}','jointDebugDays',parseInt(this.value)||0)">
           </div>
-          ${testDaysHTML}
         </div>
 
         <div style="font-size:12px;color:var(--text-secondary);padding:8px 10px;background:var(--primary-light);border-radius:var(--radius-sm);">
