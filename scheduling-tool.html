@@ -1113,7 +1113,27 @@ function loadState() {
 }
 
 function applyState(data) {
-  state = { projectName: '', reviewDate: '', targetTestDate: '', members: [], ...data };
+  const normalizedMembers = Array.isArray(data.members)
+    ? data.members.map(m => ({
+        dependencies: Array.isArray(m.dependencies) ? m.dependencies : [],
+        devStartDate: m.devStartDate || '',
+        devSP: m.devSP ?? '',
+        devEndDate: m.devEndDate || '',
+        jointDebugDays: m.jointDebugDays ?? '',
+        testDays: m.testDays ?? (m.role === 'test' ? '' : 0),
+        expanded: m.expanded ?? true,
+        ...m,
+      }))
+    : [];
+
+  state = {
+    projectName: '',
+    reviewDate: '',
+    targetTestDate: '',
+    members: normalizedMembers,
+    ...data,
+    members: normalizedMembers,
+  };
   document.getElementById('projectName').value    = state.projectName    || '';
   document.getElementById('reviewDate').value     = state.reviewDate     || '';
   document.getElementById('targetTestDate').value = state.targetTestDate || '';
@@ -1253,8 +1273,10 @@ function renderMemberList() {
   emptyEl.style.display = 'none';
 
   state.members.forEach(member => {
-    const cfg = ROLE_CONFIG[member.role];
-    const cls = ROLE_CLS[member.role];
+    const normalizedDeps = Array.isArray(member.dependencies) ? member.dependencies : [];
+    member.dependencies = normalizedDeps;
+    const cfg = getRoleCfg(member);
+    const cls = ROLE_CLS[member.role] || 'role-custom';
     const others = state.members.filter(m => m.id !== member.id);
 
     const card = document.createElement('div');
@@ -1271,7 +1293,7 @@ function renderMemberList() {
             ${others.map(o => `
               <label class="dep-checkbox-item">
                 <input type="checkbox"
-                  ${member.dependencies.includes(o.id) ? 'checked' : ''}
+                  ${normalizedDeps.includes(o.id) ? 'checked' : ''}
                   onchange="toggleDep('${member.id}','${o.id}',this.checked)">
                 <span>${getRoleCfg(o).icon} ${o.label}</span>
               </label>
