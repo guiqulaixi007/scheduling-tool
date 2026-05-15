@@ -284,9 +284,9 @@
   .gantt-bar-dev  { background: linear-gradient(90deg, #4f6ef7, #6683f8); }
   .gantt-bar-jd   { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
   .gantt-bar-test { background: linear-gradient(90deg, #22c55e, #34d399); }
-  .gantt-bar-milestone-online  { background: #ef4444; height: 22px; font-size: 12px; font-weight: 700; border-radius: 4px; box-shadow: 0 2px 6px rgba(239,68,68,0.3); }
-  .gantt-bar-milestone-publish { background: #0ea5e9; height: 22px; font-size: 12px; font-weight: 700; border-radius: 4px; box-shadow: 0 2px 6px rgba(14,165,233,0.3); }
-  .gantt-bar-milestone-freeze  { background: #8b5cf6; height: 22px; font-size: 12px; font-weight: 700; border-radius: 4px; box-shadow: 0 2px 6px rgba(139,92,246,0.3); }
+  .gantt-bar-milestone-online  { background: #ef4444; height: 22px; font-size: 10px; font-weight: 700; border-radius: 4px; box-shadow: 0 2px 6px rgba(239,68,68,0.3); padding: 0 4px; }
+  .gantt-bar-milestone-publish { background: #0ea5e9; height: 22px; font-size: 10px; font-weight: 700; border-radius: 4px; box-shadow: 0 2px 6px rgba(14,165,233,0.3); padding: 0 4px; }
+  .gantt-bar-milestone-freeze  { background: #8b5cf6; height: 22px; font-size: 10px; font-weight: 700; border-radius: 4px; box-shadow: 0 2px 6px rgba(139,92,246,0.3); padding: 0 4px; }
   .gantt-cell-bg { position: absolute; top: 0; bottom: 0; }
   .gantt-cell-bg.weekend-bg { background: rgba(241,245,249,0.7); }
   .gantt-cell-bg.today-line { border-left: 2px solid var(--primary); }
@@ -1885,10 +1885,16 @@ function renderGantt() {
     const s = si >= 0 ? si : 0;
     const e = ei >= 0 ? ei : dates.length - 1;
     if (s > dates.length - 1) return '';
-    const left  = s * CELL_W;
-    const width = Math.max((e - s + 1) * CELL_W - 2, 8);
+
+    const rawWidth = Math.max((e - s + 1) * CELL_W - 2, 8);
+    const isMilestone = barCls.includes('gantt-bar-milestone');
+    const width = isMilestone ? Math.max(rawWidth, 62) : rawWidth;
+    const leftBase = s * CELL_W;
+    const left = isMilestone ? Math.max(leftBase - Math.floor((width - rawWidth) / 2), 0) : leftBase;
+
+    const text = isMilestone ? label : (width > 40 ? label : '');
     return `<div class="gantt-bar ${barCls}" style="left:${left}px;width:${width}px;"
-              title="${label}：${startStr} ~ ${endStr}">${width > 40 ? label : ''}</div>`;
+              title="${label}：${startStr} ~ ${endStr}">${text}</div>`;
   }
 
   // ---- Header ----
