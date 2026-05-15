@@ -175,7 +175,7 @@
   .role-type-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
 
   .member-list { display: flex; flex-direction: column; gap: 12px; }
-  .member-card { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: box-shadow 0.2s; }
+  .member-card { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: box-shadow 0.2s, opacity 0.2s; }
   .member-card:hover { box-shadow: var(--shadow-md); }
   .member-card-header { padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; background: #fff; }
   .member-card-header-left { display: flex; align-items: center; gap: 10px; }
@@ -188,6 +188,18 @@
   .member-name-input:hover, .member-name-input:focus { border-bottom-color: var(--primary); }
   .member-card-body { padding: 16px; border-top: 1px solid var(--border); background: var(--bg); }
   .member-card-body.collapsed { display: none; }
+
+  /* 拖拽排序 */
+  .drag-handle {
+    display: flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; cursor: grab; color: var(--border); flex-shrink: 0;
+    border-radius: 4px; transition: color 0.15s, background 0.15s;
+  }
+  .drag-handle:hover { color: var(--text-secondary); background: var(--bg); }
+  .drag-handle:active { cursor: grabbing; }
+  .member-card.dragging { opacity: 0.4; box-shadow: none; }
+  .member-card.drag-over-above { border-top: 2px solid var(--primary); }
+  .member-card.drag-over-below { border-bottom: 2px solid var(--primary); }
 
   /* 依赖选择 */
   .dep-section-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
@@ -1508,6 +1520,17 @@ function renderMemberList() {
       <!-- 卡片头部 -->
       <div class="member-card-header" onclick="toggleMemberCard('${member.id}')">
         <div class="member-card-header-left">
+          ${member.role !== 'test' ? `
+          <div class="drag-handle" title="拖拽调整顺序" onclick="event.stopPropagation()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="9" cy="5" r="1" fill="currentColor" stroke="none"/>
+              <circle cx="15" cy="5" r="1" fill="currentColor" stroke="none"/>
+              <circle cx="9" cy="12" r="1" fill="currentColor" stroke="none"/>
+              <circle cx="15" cy="12" r="1" fill="currentColor" stroke="none"/>
+              <circle cx="9" cy="19" r="1" fill="currentColor" stroke="none"/>
+              <circle cx="15" cy="19" r="1" fill="currentColor" stroke="none"/>
+            </svg>
+          </div>` : `<div style="width:20px;flex-shrink:0;"></div>`}
           <svg id="collapseIcon_${member.id}" width="16" height="16" viewBox="0 0 24 24"
             fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;transition:transform 0.2s;${member.expanded?'':'transform:rotate(-90deg)'}">
             <polyline points="6 9 12 15 18 9"/>
@@ -1584,6 +1607,111 @@ function renderMemberList() {
 
     listEl.appendChild(card);
     updateMemberSummary(member.id);
+    // 非测试角色设置为可拖拽
+    if (member.role !== 'test') card.draggable = true;
+  });
+
+  // 初始化拖拽排序
+  initDragSort();
+}
+
+/** 拖拽排序初始化（仅对非 test 角色生效，test 角色始终锁定在末尾） */
+function initDragSort() {
+  const listEl = document.getElementById('memberList');
+  let draggingId = null;
+  let overCard   = null;
+  let overPos    = null; // 'above' | 'below'
+
+  // 获取当前列表中所有可拖拽卡片（非 test）
+  const cards = Array.from(listEl.querySelectorAll('.member-card[draggable="true"]'));
+
+  cards.forEach(card => {
+    card.addEventListener('dragstart', e => {
+      draggingId = card.id.replace('memberCard_', '');
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', draggingId);
+    });
+
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      if (overCard) {
+        overCard.classList.remove('drag-over-above', 'drag-over-below');
+        overCard = null;
+      }
+      draggingId = null;
+      overPos    = null;
+    });
+  });
+
+  // 所有卡片（含 test）都可以作为放置目标
+  const allCards = Array.from(listEl.querySelectorAll('.member-card'));
+  allCards.forEach(card => {
+    card.addEventListener('dragover', e => {
+      if (!draggingId) return;
+      const targetId = card.id.replace('memberCard_', '');
+      const targetMember = state.members.find(m => m.id === targetId);
+
+      // 不能拖到 test 角色的位置（test 始终在底部）
+      if (targetMember && targetMember.role === 'test') {
+        e.dataTransfer.dropEffect = 'none';
+        return;
+      }
+
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+
+      // 判断放置位置：鼠标在卡片上半还是下半
+      const rect = card.getBoundingClientRect();
+      const pos  = e.clientY < rect.top + rect.height / 2 ? 'above' : 'below';
+
+      if (overCard && overCard !== card) {
+        overCard.classList.remove('drag-over-above', 'drag-over-below');
+      }
+      overCard = card;
+      overPos  = pos;
+      card.classList.remove('drag-over-above', 'drag-over-below');
+      card.classList.add(`drag-over-${pos}`);
+    });
+
+    card.addEventListener('dragleave', e => {
+      if (!e.currentTarget.contains(e.relatedTarget)) {
+        card.classList.remove('drag-over-above', 'drag-over-below');
+        if (overCard === card) { overCard = null; overPos = null; }
+      }
+    });
+
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!draggingId || !overCard) return;
+
+      const targetId = overCard.id.replace('memberCard_', '');
+      if (draggingId === targetId) return;
+
+      overCard.classList.remove('drag-over-above', 'drag-over-below');
+
+      // 按当前 DOM 顺序重建 state.members，再把 test 角色追加到末尾
+      const domCards = Array.from(listEl.querySelectorAll('.member-card'));
+      const domIds   = domCards.map(c => c.id.replace('memberCard_', ''));
+
+      // 先从 domIds 中移除 draggingId
+      const cleanIds = domIds.filter(id => id !== draggingId);
+      // 插入到目标位置
+      const targetIdx = cleanIds.indexOf(targetId);
+      const insertIdx = overPos === 'above' ? targetIdx : targetIdx + 1;
+      cleanIds.splice(insertIdx, 0, draggingId);
+
+      // 按新 DOM 顺序重排 state.members（test 角色最后）
+      const nonTest = cleanIds
+        .map(id => state.members.find(m => m.id === id))
+        .filter(m => m && m.role !== 'test');
+      const testMembers = state.members.filter(m => m.role === 'test');
+      state.members = [...nonTest, ...testMembers];
+
+      saveState();
+      renderMemberList();
+      updateJointDebugInfo();
+    });
   });
 }
 
@@ -1736,10 +1864,16 @@ function renderGantt() {
   });
   headerHTML += `</div></div>`;
 
-  // ---- Body rows（每个成员一行）----
+  // ---- Body rows（每个成员一行，测试角色始终排在末尾）----
   let bodyHTML = '<div class="gantt-body">';
 
-  members.forEach(m => {
+  // 渲染顺序：非 test 角色保持 state 中的顺序，test 角色排到最后
+  const sortedMembers = [
+    ...members.filter(m => m.role !== 'test'),
+    ...members.filter(m => m.role === 'test'),
+  ];
+
+  sortedMembers.forEach(m => {
     const cfg = getRoleCfg(m);
     const isTest = m.role === 'test';
     const barCls  = isTest ? 'gantt-bar-test' : 'gantt-bar-dev';
