@@ -856,6 +856,8 @@ function addMember(role, customOpts) {
     devEndDate: '',
     jointDebugDays: '',
     testDays: role === 'test' ? '' : 0,
+    onlineDate: '',      // 后端上线日期（非必填）
+    publishDate: '',     // 前端发布日期（非必填）
     expanded: true,
   };
   state.members.push(member);
@@ -1320,6 +1322,8 @@ function applyState(data) {
         devEndDate: m.devEndDate || '',
         jointDebugDays: m.jointDebugDays ?? '',
         testDays: m.testDays ?? (m.role === 'test' ? '' : 0),
+        onlineDate: m.onlineDate ?? '',
+        publishDate: m.publishDate ?? '',
         expanded: m.expanded ?? true,
         ...m,
       }))
@@ -1598,6 +1602,35 @@ function renderMemberList() {
               onchange="updateMember('${member.id}','jointDebugDays',parseInt(this.value)||0)">
           </div>
         </div>
+
+        ${member.role === 'backend' ? `
+        <!-- 上线日期 -->
+        <div class="form-row" style="margin-top:8px;">
+          <div class="form-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:4px;">
+              🚀 上线日期
+              <span style="font-size:10px;color:var(--text-secondary);font-weight:400;">（非必填）</span>
+            </label>
+            <input type="date" class="form-input form-input-sm"
+              id="onlineDate_${member.id}" value="${member.onlineDate || ''}"
+              onchange="updateMember('${member.id}','onlineDate',this.value)">
+          </div>
+          <div class="form-group"></div>
+        </div>` : ''}
+        ${member.role === 'frontend' ? `
+        <!-- 发布日期 -->
+        <div class="form-row" style="margin-top:8px;">
+          <div class="form-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:4px;">
+              📦 发布日期
+              <span style="font-size:10px;color:var(--text-secondary);font-weight:400;">（非必填）</span>
+            </label>
+            <input type="date" class="form-input form-input-sm"
+              id="publishDate_${member.id}" value="${member.publishDate || ''}"
+              onchange="updateMember('${member.id}','publishDate',this.value)">
+          </div>
+          <div class="form-group"></div>
+        </div>` : ''}
 
         <div style="font-size:12px;color:var(--text-secondary);padding:8px 10px;background:var(--primary-light);border-radius:var(--radius-sm);">
           💡 联调起点由所有角色最晚开发完成日期统一决定；联调天数填 0 表示该角色不参与联调
@@ -1878,6 +1911,16 @@ function renderGantt() {
     const isTest = m.role === 'test';
     const barCls  = isTest ? 'gantt-bar-test' : 'gantt-bar-dev';
     const barLabel = isTest ? '测试' : '开发';
+    // 里程碑标记：后端上线日期 / 前端发布日期
+    let milestoneHTML = '';
+    if (m.role === 'backend' && m.onlineDate) {
+      const mi = dates.indexOf(m.onlineDate);
+      if (mi >= 0) milestoneHTML = `<div style="position:absolute;left:${mi * CELL_W + CELL_W/2}px;top:0;bottom:0;width:2px;background:#ef4444;z-index:4;" title="🚀 上线日期：${m.onlineDate}"></div><div style="position:absolute;left:${mi * CELL_W + CELL_W/2 - 6}px;top:8px;font-size:10px;color:#ef4444;font-weight:600;z-index:5;">🚀</div>`;
+    }
+    if (m.role === 'frontend' && m.publishDate) {
+      const mi = dates.indexOf(m.publishDate);
+      if (mi >= 0) milestoneHTML = `<div style="position:absolute;left:${mi * CELL_W + CELL_W/2}px;top:0;bottom:0;width:2px;background:#0ea5e9;z-index:4;" title="📦 发布日期：${m.publishDate}"></div><div style="position:absolute;left:${mi * CELL_W + CELL_W/2 - 6}px;top:8px;font-size:10px;color:#0ea5e9;font-weight:600;z-index:5;">📦</div>`;
+    }
     bodyHTML += `
       <div class="gantt-row${isTest ? ' test-row' : ''}">
         <div class="gantt-label-col" style="width:130px;min-width:130px;">
@@ -1888,6 +1931,7 @@ function renderGantt() {
           ${bgCellsHTML()}
           ${barHTML(m.devStartDate, m.devEndDate, barCls, barLabel)}
           ${m._jdStart && m._jdEnd ? barHTML(m._jdStart, m._jdEnd, 'gantt-bar-jd', '联调') : ''}
+          ${milestoneHTML}
         </div>
       </div>`;
   });
@@ -1938,6 +1982,12 @@ function renderSummary(jdStart, testStart, testEnd) {
   ];
   if (testStart) cards.push({ label: '提测日期', value: testStart, sub: weekOf(testStart) });
   if (testEnd)   cards.push({ label: '测试完成', value: testEnd,   sub: weekOf(testEnd)   });
+
+  // 上线日期和发布日期
+  const onlineDates  = members.filter(m => m.role === 'backend' && m.onlineDate).map(m => ({ label: `${m.label} 上线`, value: m.onlineDate, sub: weekOf(m.onlineDate) }));
+  const publishDates = members.filter(m => m.role === 'frontend' && m.publishDate).map(m => ({ label: `${m.label} 发布`, value: m.publishDate, sub: weekOf(m.publishDate) }));
+  cards.push(...onlineDates, ...publishDates);
+
   if (testEnd)   cards.push({ label: '🔒 封版日期', value: testEnd, sub: '与测试完成同天', highlight: true });
   if (targetLabel) cards.push({ label: '目标提测', value: targetLabel, sub: targetSub });
   cards.push({ label: '总工期', value: totalDays ? `${totalDays} 天` : '—', sub: '工作日' });
