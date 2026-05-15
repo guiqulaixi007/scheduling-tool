@@ -554,6 +554,9 @@
     <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--text-secondary);padding:0 4px;">
       <div style="display:flex;align-items:center;gap:6px;"><div style="width:22px;height:10px;border-radius:3px;background:linear-gradient(90deg,#4f6ef7,#6683f8)"></div>开发阶段</div>
       <div style="display:flex;align-items:center;gap:6px;"><div style="width:22px;height:10px;border-radius:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24)"></div>联调阶段</div>
+      <div style="display:flex;align-items:center;gap:4px;"><span style="color:#ef4444;font-weight:600;font-size:13px;">🚀</span> 上线</div>
+      <div style="display:flex;align-items:center;gap:4px;"><span style="color:#0ea5e9;font-weight:600;font-size:13px;">📦</span> 发布</div>
+      <div style="display:flex;align-items:center;gap:4px;"><span style="color:#8b5cf6;font-weight:600;font-size:13px;">🔒</span> 封版</div>
       <div style="display:flex;align-items:center;gap:6px;"><div style="width:16px;height:10px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:2px"></div>周末/节假日</div>
     </div>
   </div>
@@ -1911,7 +1914,7 @@ function renderGantt() {
     const isTest = m.role === 'test';
     const barCls  = isTest ? 'gantt-bar-test' : 'gantt-bar-dev';
     const barLabel = isTest ? '测试' : '开发';
-    // 里程碑标记：后端上线日期 / 前端发布日期
+    // 里程碑标记：后端上线日期 / 前端发布日期 / 客户端封版
     let milestoneHTML = '';
     if (m.role === 'backend' && m.onlineDate) {
       const mi = dates.indexOf(m.onlineDate);
@@ -1920,6 +1923,10 @@ function renderGantt() {
     if (m.role === 'frontend' && m.publishDate) {
       const mi = dates.indexOf(m.publishDate);
       if (mi >= 0) milestoneHTML = `<div style="position:absolute;left:${mi * CELL_W + CELL_W/2}px;top:0;bottom:0;width:2px;background:#0ea5e9;z-index:4;" title="📦 发布日期：${m.publishDate}"></div><div style="position:absolute;left:${mi * CELL_W + CELL_W/2 - 6}px;top:8px;font-size:10px;color:#0ea5e9;font-weight:600;z-index:5;">📦</div>`;
+    }
+    if ((m.role === 'ios' || m.role === 'android') && m.devEndDate) {
+      const mi = dates.indexOf(m.devEndDate);
+      if (mi >= 0) milestoneHTML = `<div style="position:absolute;left:${mi * CELL_W + CELL_W}px;top:0;bottom:0;width:2px;background:#8b5cf6;z-index:4;" title="🔒 封版日期：${m.devEndDate}"></div><div style="position:absolute;left:${mi * CELL_W + CELL_W - 6}px;top:8px;font-size:10px;color:#8b5cf6;font-weight:600;z-index:5;">🔒</div>`;
     }
     bodyHTML += `
       <div class="gantt-row${isTest ? ' test-row' : ''}">
@@ -1974,31 +1981,59 @@ function renderSummary(jdStart, testStart, testEnd) {
     targetLabel = state.targetTestDate;
   }
 
-  const cards = [
-    { label: '开发开始', value: devStart || '—', sub: devStart ? weekOf(devStart) : '' },
-    { label: '开发完成', value: devEnd   || '—', sub: devEnd   ? weekOf(devEnd)   : '' },
-    { label: '联调开始', value: jdStart  || '—', sub: jdStart  ? weekOf(jdStart)  : '' },
-    { label: '联调完成', value: jdEnd    || '—', sub: jdEnd    ? weekOf(jdEnd)    : '' },
-  ];
-  if (testStart) cards.push({ label: '提测日期', value: testStart, sub: weekOf(testStart) });
-  if (testEnd)   cards.push({ label: '测试完成', value: testEnd,   sub: weekOf(testEnd)   });
+  // 构建：所有有日期的卡片先收集，然后按日期排序；总工期和目标提测固定在最末
+  const dateCards = [];
+  if (devStart)  dateCards.push({ label: '开发开始', value: devStart, sub: weekOf(devStart), color: 'dev' });
+  if (devEnd)    dateCards.push({ label: '开发完成', value: devEnd,   sub: weekOf(devEnd),   color: 'dev' });
+  if (jdStart)   dateCards.push({ label: '联调开始', value: jdStart,  sub: weekOf(jdStart),  color: 'jd' });
+  if (jdEnd)     dateCards.push({ label: '联调完成', value: jdEnd,    sub: weekOf(jdEnd),    color: 'jd' });
+  if (testStart) dateCards.push({ label: '提测日期', value: testStart, sub: weekOf(testStart), color: 'test' });
+  if (testEnd)   dateCards.push({ label: '测试完成', value: testEnd,   sub: weekOf(testEnd),   color: 'test' });
+  // 上线日期（红色）、发布日期（蓝色）、客户端封版（紫色）
+  members.filter(m => m.role === 'backend' && m.onlineDate).forEach(m =>
+    dateCards.push({ label: `${m.label} 上线`, value: m.onlineDate, sub: weekOf(m.onlineDate), color: 'online' })
+  );
+  members.filter(m => m.role === 'frontend' && m.publishDate).forEach(m =>
+    dateCards.push({ label: `${m.label} 发布`, value: m.publishDate, sub: weekOf(m.publishDate), color: 'publish' })
+  );
+  // iOS/Android 封版节点（用 devEndDate 作为封版日期）
+  members.filter(m => (m.role === 'ios' || m.role === 'android') && m.devEndDate).forEach(m =>
+    dateCards.push({ label: `${m.label} 封版`, value: m.devEndDate, sub: weekOf(m.devEndDate), color: 'freeze' })
+  );
 
-  // 上线日期和发布日期
-  const onlineDates  = members.filter(m => m.role === 'backend' && m.onlineDate).map(m => ({ label: `${m.label} 上线`, value: m.onlineDate, sub: weekOf(m.onlineDate) }));
-  const publishDates = members.filter(m => m.role === 'frontend' && m.publishDate).map(m => ({ label: `${m.label} 发布`, value: m.publishDate, sub: weekOf(m.publishDate) }));
-  cards.push(...onlineDates, ...publishDates);
+  // 按日期排序（升序），没有日期的排到末尾
+  dateCards.sort((a, b) => {
+    if (!a.value || a.value === '—') return 1;
+    if (!b.value || b.value === '—') return -1;
+    return a.value < b.value ? -1 : a.value > b.value ? 1 : 0;
+  });
 
-  if (testEnd)   cards.push({ label: '🔒 封版日期', value: testEnd, sub: '与测试完成同天', highlight: true });
+  const cards = [...dateCards];
   if (targetLabel) cards.push({ label: '目标提测', value: targetLabel, sub: targetSub });
   cards.push({ label: '总工期', value: totalDays ? `${totalDays} 天` : '—', sub: '工作日' });
 
-  document.getElementById('summaryCards').innerHTML = cards.map(c => `
-    <div class="summary-card" ${c.highlight ? 'style="border-color:#8b5cf6;background:linear-gradient(135deg,#faf5ff,#f3e8ff);"' : ''}>
-      <div class="sc-label" ${c.highlight ? 'style="color:#7c3aed;"' : ''}>${c.label}</div>
-      <div class="sc-value" style="font-size:${c.value && c.value.length > 10 ? '13px' : ''};${c.highlight ? 'color:#6d28d9;' : ''}">${c.value}</div>
-      ${c.sub ? `<div class="sc-sub" ${c.highlight ? 'style="color:#7c3aed;font-weight:500;"' : ''}>${c.sub}</div>` : ''}
-    </div>
-  `).join('');
+  // 卡片颜色映射
+  const cardColorMap = {
+    dev:     { border: '#4f6ef7', bg: 'linear-gradient(135deg,#eef1fe,#dbeafe)', text: '#4f6ef7' },
+    jd:      { border: '#f59e0b', bg: 'linear-gradient(135deg,#fffbeb,#fef3c7)', text: '#b45309' },
+    test:    { border: '#22c55e', bg: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', text: '#16a34a' },
+    online:  { border: '#ef4444', bg: 'linear-gradient(135deg,#fef2f2,#fecaca)', text: '#dc2626' },
+    publish: { border: '#0ea5e9', bg: 'linear-gradient(135deg,#f0f9ff,#e0f2fe)', text: '#0369a1' },
+    freeze:  { border: '#8b5cf6', bg: 'linear-gradient(135deg,#faf5ff,#f3e8ff)', text: '#7c3aed' },
+  };
+
+  document.getElementById('summaryCards').innerHTML = cards.map(c => {
+    const cm = cardColorMap[c.color];
+    const style = cm ? `border-color:${cm.border};background:${cm.bg};` : '';
+    const labelStyle = cm ? `color:${cm.text};` : '';
+    const valueStyle = cm ? `color:${cm.text};` : '';
+    return `
+    <div class="summary-card" ${style ? `style="${style}"` : ''}>
+      <div class="sc-label" ${labelStyle ? `style="${labelStyle}"` : ''}>${c.label}</div>
+      <div class="sc-value" style="font-size:${c.value && c.value.length > 10 ? '13px' : ''};${valueStyle}">${c.value}</div>
+      ${c.sub ? `<div class="sc-sub" ${labelStyle ? `style="${labelStyle};font-weight:500;"` : ''}>${c.sub}</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 // ============================================================
