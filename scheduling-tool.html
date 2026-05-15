@@ -884,9 +884,17 @@ function updateMember(id, field, value) {
     if (endEl) endEl.value = m.devEndDate || '';
   }
 
-  // 联动计算：手动修改完成日期 → 反算SP
+  // 联动计算：手动修改完成日期 → 反算SP；并校验完成日期不能早于开始日期
   if (field === 'devEndDate') {
-    if (m.devStartDate && m.devEndDate && m.devEndDate >= m.devStartDate) {
+    if (m.devStartDate && m.devEndDate && m.devEndDate < m.devStartDate) {
+      // 完成日期早于开始日期 → 提示并回滚
+      const typeLabel = m.role === 'test' ? '测试完成日期' : '开发完成日期';
+      const startLabel = m.role === 'test' ? '开始测试日期' : '开始开发日期';
+      showToast(`❌ ${typeLabel}不能早于${startLabel}，请重新选择`, 3500);
+      m.devEndDate = '';
+      const endEl = document.getElementById(`devEnd_${id}`);
+      if (endEl) endEl.value = '';
+    } else if (m.devStartDate && m.devEndDate && m.devEndDate >= m.devStartDate) {
       const days = workdaysBetween(m.devStartDate, m.devEndDate);
       if (m.role === 'test') {
         m.testDays = days;
@@ -898,6 +906,15 @@ function updateMember(id, field, value) {
         if (spEl) spEl.value = m.devSP;
       }
     }
+  }
+
+  // 开始日期变更时：如果完成日期已存在且早于新的开始日期，清空完成日期并提示
+  if (field === 'devStartDate' && m.devEndDate && m.devEndDate < m.devStartDate) {
+    const typeLabel = m.role === 'test' ? '开始测试日期' : '开始开发日期';
+    showToast(`⚠️ ${typeLabel}已调整，完成日期已重置，请重新填写`, 3000);
+    m.devEndDate = '';
+    const endEl = document.getElementById(`devEnd_${id}`);
+    if (endEl) endEl.value = '';
   }
 
   saveState();
@@ -1408,6 +1425,17 @@ function goStep2() {
 
 function generateGantt() {
   if (!state.members.length) { showToast('⚠️ 请至少添加一个参与角色'); return; }
+
+  // 整体校验：完成日期不能早于开始日期
+  const invalidMembers = state.members.filter(m =>
+    m.devStartDate && m.devEndDate && m.devEndDate < m.devStartDate
+  );
+  if (invalidMembers.length > 0) {
+    const names = invalidMembers.map(m => m.label).join('、');
+    showToast(`❌ 以下角色完成日期早于开始日期，请修正后再生成：${names}`, 4000);
+    return;
+  }
+
   currentStep = 3;
   document.getElementById('step1').style.display = 'none';
   document.getElementById('step2').style.display = 'none';
@@ -1712,36 +1740,23 @@ function renderGantt() {
   let bodyHTML = '<div class="gantt-body">';
 
   members.forEach(m => {
-    const cfg = ROLE_CONFIG[m.role];
+    const cfg = getRoleCfg(m);
+    const isTest = m.role === 'test';
+    const barCls  = isTest ? 'gantt-bar-test' : 'gantt-bar-dev';
+    const barLabel = isTest ? '测试' : '开发';
     bodyHTML += `
-      <div class="gantt-row">
+      <div class="gantt-row${isTest ? ' test-row' : ''}">
         <div class="gantt-label-col" style="width:130px;min-width:130px;">
           <span style="font-size:15px;flex-shrink:0;">${cfg.icon}</span>
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${m.label}">${m.label}</span>
         </div>
         <div class="gantt-bars">
           ${bgCellsHTML()}
-          ${barHTML(m.devStartDate, m.devEndDate, 'gantt-bar-dev', '开发')}
+          ${barHTML(m.devStartDate, m.devEndDate, barCls, barLabel)}
           ${m._jdStart && m._jdEnd ? barHTML(m._jdStart, m._jdEnd, 'gantt-bar-jd', '联调') : ''}
         </div>
       </div>`;
   });
-
-  // ---- 测试行（如有测试工程师）----
-  if (testStart && testEnd) {
-    const maxDays = Math.max(...testMembers.map(m => m.testDays));
-    bodyHTML += `
-      <div class="gantt-row test-row">
-        <div class="gantt-label-col" style="width:130px;min-width:130px;">
-          <span style="font-size:15px;">🧪</span>
-          <span>测试</span>
-        </div>
-        <div class="gantt-bars">
-          ${bgCellsHTML()}
-          ${barHTML(testStart, testEnd, 'gantt-bar-test', `测试(${maxDays}天)`)}
-        </div>
-      </div>`;
-  }
 
   bodyHTML += '</div>';
   container.innerHTML = headerHTML + bodyHTML;
