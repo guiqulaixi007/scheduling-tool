@@ -1976,53 +1976,23 @@ function renderGantt() {
 // Part 8: 汇总卡片渲染
 // ============================================================
 
-function renderSummary(jdStart, testStart, testEnd) {
+function renderSummary(_jdStart, _testStart, testEnd) {
   const members = state.members;
 
-  const allDevStarts = members.map(m => m.devStartDate).filter(Boolean).sort();
-  const allDevEnds   = members.map(m => m.devEndDate).filter(Boolean).sort();
-  const allJdEnds    = members.map(m => m._jdEnd).filter(Boolean).sort();
+  // 仅保留交付类卡片：后端上线、前端发布、客户端封版
+  const cards = [];
 
-  const devStart = allDevStarts[0]                          || null;
-  const devEnd   = allDevEnds[allDevEnds.length - 1]        || null;
-  const jdEnd    = allJdEnds[allJdEnds.length - 1]          || null;
+  // 后端上线
+  members
+    .filter(m => m.role === 'backend' && m.onlineDate)
+    .forEach(m => cards.push({ label: `${m.label} 上线`, value: m.onlineDate, sub: weekOf(m.onlineDate), color: 'online' }));
 
-  // 总工期：从开发开始 → 测试完成（或联调完成）
-  const finalEnd   = testEnd || jdEnd || devEnd;
-  const totalDays  = (devStart && finalEnd) ? workdaysBetween(devStart, finalEnd) : null;
+  // 前端发布
+  members
+    .filter(m => m.role === 'frontend' && m.publishDate)
+    .forEach(m => cards.push({ label: `${m.label} 发布`, value: m.publishDate, sub: weekOf(m.publishDate), color: 'publish' }));
 
-  // 目标提测对比
-  let targetLabel = null, targetSub = null;
-  if (state.targetTestDate && testStart) {
-    const diff = workdaysBetween(
-      testStart < state.targetTestDate ? testStart : state.targetTestDate,
-      testStart < state.targetTestDate ? state.targetTestDate : testStart
-    );
-    if (testStart <= state.targetTestDate) {
-      targetSub = `提前 ${diff} 个工作日 ✅`;
-    } else {
-      targetSub = `超期 ${diff} 个工作日 ⚠️`;
-    }
-    targetLabel = state.targetTestDate;
-  }
-
-  // 构建：所有有日期的卡片先收集，然后按日期排序；总工期和目标提测固定在最末
-  const dateCards = [];
-  if (devStart)  dateCards.push({ label: '开发开始', value: devStart, sub: weekOf(devStart) });
-  if (devEnd)    dateCards.push({ label: '开发完成', value: devEnd,   sub: weekOf(devEnd) });
-  if (jdStart)   dateCards.push({ label: '联调开始', value: jdStart,  sub: weekOf(jdStart) });
-  if (jdEnd)     dateCards.push({ label: '联调完成', value: jdEnd,    sub: weekOf(jdEnd) });
-  if (testStart) dateCards.push({ label: '提测日期', value: testStart, sub: weekOf(testStart) });
-  if (testEnd)   dateCards.push({ label: '测试完成', value: testEnd,   sub: weekOf(testEnd) });
-  // 上线日期（红色高亮）、发布日期（蓝色高亮）、客户端封版（紫色高亮）
-  members.filter(m => m.role === 'backend' && m.onlineDate).forEach(m =>
-    dateCards.push({ label: `${m.label} 上线`, value: m.onlineDate, sub: weekOf(m.onlineDate), color: 'online' })
-  );
-  members.filter(m => m.role === 'frontend' && m.publishDate).forEach(m =>
-    dateCards.push({ label: `${m.label} 发布`, value: m.publishDate, sub: weekOf(m.publishDate), color: 'publish' })
-  );
-
-  // 客户端封版节点：优先用户选择 freezeDate，否则默认测试完成后第1个工作日
+  // 客户端封版：优先用户选择 freezeDate，否则默认测试完成后第1个工作日
   const iosMember = members.find(m => m.role === 'ios');
   const androidMember = members.find(m => m.role === 'android');
   const defaultFreezeDate = testEnd ? addWorkdays(testEnd, 1) : '';
@@ -2030,29 +2000,34 @@ function renderSummary(jdStart, testStart, testEnd) {
   const androidFreeze = androidMember ? (androidMember.freezeDate || defaultFreezeDate) : '';
 
   if (iosFreeze && androidFreeze && iosFreeze === androidFreeze) {
-    dateCards.push({ label: '客户端封版', value: iosFreeze, sub: weekOf(iosFreeze), color: 'freeze' });
+    cards.push({ label: '客户端封版', value: iosFreeze, sub: weekOf(iosFreeze), color: 'freeze' });
   } else {
-    if (iosFreeze) dateCards.push({ label: 'iOS 封版', value: iosFreeze, sub: weekOf(iosFreeze), color: 'freeze' });
-    if (androidFreeze) dateCards.push({ label: 'Android 封版', value: androidFreeze, sub: weekOf(androidFreeze), color: 'freeze' });
+    if (iosFreeze) cards.push({ label: 'iOS 封版', value: iosFreeze, sub: weekOf(iosFreeze), color: 'freeze' });
+    if (androidFreeze) cards.push({ label: 'Android 封版', value: androidFreeze, sub: weekOf(androidFreeze), color: 'freeze' });
   }
 
-  // 按日期排序（升序），没有日期的排到末尾
-  dateCards.sort((a, b) => {
+  // 按日期排序（升序）
+  cards.sort((a, b) => {
     if (!a.value || a.value === '—') return 1;
     if (!b.value || b.value === '—') return -1;
     return a.value < b.value ? -1 : a.value > b.value ? 1 : 0;
   });
 
-  const cards = [...dateCards];
-  if (targetLabel) cards.push({ label: '目标提测', value: targetLabel, sub: targetSub });
-  cards.push({ label: '总工期', value: totalDays ? `${totalDays} 天` : '—', sub: '工作日' });
-
-  // 仅交付节点卡片高亮着色
   const highlightMap = {
     online:  { border: '#ef4444', bg: 'linear-gradient(135deg,#fef2f2,#fecaca)', text: '#dc2626' },
     publish: { border: '#0ea5e9', bg: 'linear-gradient(135deg,#f0f9ff,#e0f2fe)', text: '#0369a1' },
     freeze:  { border: '#8b5cf6', bg: 'linear-gradient(135deg,#faf5ff,#f3e8ff)', text: '#7c3aed' },
   };
+
+  if (!cards.length) {
+    document.getElementById('summaryCards').innerHTML = `
+      <div class="summary-card" style="grid-column:1/-1;">
+        <div class="sc-label">交付节点</div>
+        <div class="sc-value" style="font-size:14px;">暂无</div>
+        <div class="sc-sub">请填写上线/发布/封版时间</div>
+      </div>`;
+    return;
+  }
 
   document.getElementById('summaryCards').innerHTML = cards.map(c => {
     const hl = highlightMap[c.color];
