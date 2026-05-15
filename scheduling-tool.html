@@ -114,6 +114,28 @@
     font-size: 14px;
     opacity: 0.75;
   }
+
+  /* ===== 数字输入交互增强 ===== */
+  input[type="number"] {
+    min-height: 40px;
+    padding-right: 8px;
+    cursor: text;
+  }
+  input[type="number"]:hover {
+    border-color: var(--primary);
+    background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    opacity: 1;
+    cursor: pointer;
+    min-height: 28px;
+    margin-left: 6px;
+  }
+  input[type="number"]:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(79,110,247,0.12), inset 0 0 0 1px rgba(79,110,247,0.06);
+  }
   .form-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
   textarea.form-input { min-height: 120px; resize: vertical; font-family: monospace; font-size: 12px; }
@@ -170,8 +192,20 @@
   /* 依赖选择 */
   .dep-section-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
   .dep-checkboxes { display: flex; flex-wrap: wrap; gap: 10px; }
-  .dep-checkbox-item { display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
+  .dep-checkbox-item {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: 999px;
+    background: #fff; transition: all 0.18s ease;
+  }
+  .dep-checkbox-item:hover {
+    border-color: var(--primary); color: var(--primary); background: var(--primary-light);
+    transform: translateY(-1px);
+  }
   .dep-checkbox-item input { cursor: pointer; width: 14px; height: 14px; accent-color: var(--primary); }
+  .dep-checkbox-item:has(input:checked) {
+    border-color: var(--primary); background: var(--primary-light); color: var(--primary);
+    box-shadow: inset 0 0 0 1px rgba(79,110,247,0.10);
+  }
 
   /* 成员摘要条 */
   .member-summary { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); }
@@ -179,14 +213,17 @@
 
   /* 联调信息栏 */
   .joint-debug-bar {
-    background: linear-gradient(135deg, #fef9ec 0%, #fef3c7 100%);
-    border: 1px solid #fcd34d; border-radius: var(--radius);
+    background: linear-gradient(135deg, #fff7d6 0%, #fde68a 100%);
+    border: 1px solid #f59e0b; border-radius: 12px;
     padding: 14px 20px; margin-top: 8px;
     display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    box-shadow: 0 6px 18px rgba(245,158,11,0.12);
+    position: sticky; top: 72px; z-index: 40;
+    backdrop-filter: blur(6px);
   }
-  .joint-debug-bar .jd-label { font-size: 13px; font-weight: 600; color: #92400e; }
-  .joint-debug-bar .jd-date  { font-size: 15px; font-weight: 700; color: #b45309; }
-  .joint-debug-bar .jd-desc  { font-size: 12px; color: #92400e; opacity: 0.8; }
+  .joint-debug-bar .jd-label { font-size: 13px; font-weight: 700; color: #92400e; }
+  .joint-debug-bar .jd-date  { font-size: 16px; font-weight: 800; color: #b45309; background: rgba(255,255,255,0.45); padding: 4px 10px; border-radius: 999px; }
+  .joint-debug-bar .jd-desc  { font-size: 12px; color: #92400e; opacity: 0.9; }
 
   /* ===== 步骤3 汇总卡片 ===== */
   .summary-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
