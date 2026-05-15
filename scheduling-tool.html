@@ -284,6 +284,9 @@
   .gantt-bar-dev  { background: linear-gradient(90deg, #4f6ef7, #6683f8); }
   .gantt-bar-jd   { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
   .gantt-bar-test { background: linear-gradient(90deg, #22c55e, #34d399); }
+  .gantt-bar-milestone-online  { background: #ef4444; height: 22px; font-size: 12px; font-weight: 700; border-radius: 4px; box-shadow: 0 2px 6px rgba(239,68,68,0.3); }
+  .gantt-bar-milestone-publish { background: #0ea5e9; height: 22px; font-size: 12px; font-weight: 700; border-radius: 4px; box-shadow: 0 2px 6px rgba(14,165,233,0.3); }
+  .gantt-bar-milestone-freeze  { background: #8b5cf6; height: 22px; font-size: 12px; font-weight: 700; border-radius: 4px; box-shadow: 0 2px 6px rgba(139,92,246,0.3); }
   .gantt-cell-bg { position: absolute; top: 0; bottom: 0; }
   .gantt-cell-bg.weekend-bg { background: rgba(241,245,249,0.7); }
   .gantt-cell-bg.today-line { border-left: 2px solid var(--primary); }
@@ -1914,19 +1917,16 @@ function renderGantt() {
     const isTest = m.role === 'test';
     const barCls  = isTest ? 'gantt-bar-test' : 'gantt-bar-dev';
     const barLabel = isTest ? '测试' : '开发';
-    // 里程碑标记：后端上线日期 / 前端发布日期 / 客户端封版
-    let milestoneHTML = '';
+    // 里程碑 bar：后端上线 / 前端发布 / 客户端封版
+    let milestoneBarHTML = '';
     if (m.role === 'backend' && m.onlineDate) {
-      const mi = dates.indexOf(m.onlineDate);
-      if (mi >= 0) milestoneHTML = `<div style="position:absolute;left:${mi * CELL_W + CELL_W/2}px;top:0;bottom:0;width:2px;background:#ef4444;z-index:4;" title="🚀 上线日期：${m.onlineDate}"></div><div style="position:absolute;left:${mi * CELL_W + CELL_W/2 - 6}px;top:8px;font-size:10px;color:#ef4444;font-weight:600;z-index:5;">🚀</div>`;
+      milestoneBarHTML += barHTML(m.onlineDate, m.onlineDate, 'gantt-bar-milestone-online', '上线');
     }
     if (m.role === 'frontend' && m.publishDate) {
-      const mi = dates.indexOf(m.publishDate);
-      if (mi >= 0) milestoneHTML = `<div style="position:absolute;left:${mi * CELL_W + CELL_W/2}px;top:0;bottom:0;width:2px;background:#0ea5e9;z-index:4;" title="📦 发布日期：${m.publishDate}"></div><div style="position:absolute;left:${mi * CELL_W + CELL_W/2 - 6}px;top:8px;font-size:10px;color:#0ea5e9;font-weight:600;z-index:5;">📦</div>`;
+      milestoneBarHTML += barHTML(m.publishDate, m.publishDate, 'gantt-bar-milestone-publish', '发布');
     }
     if ((m.role === 'ios' || m.role === 'android') && m.devEndDate) {
-      const mi = dates.indexOf(m.devEndDate);
-      if (mi >= 0) milestoneHTML = `<div style="position:absolute;left:${mi * CELL_W + CELL_W}px;top:0;bottom:0;width:2px;background:#8b5cf6;z-index:4;" title="🔒 封版日期：${m.devEndDate}"></div><div style="position:absolute;left:${mi * CELL_W + CELL_W - 6}px;top:8px;font-size:10px;color:#8b5cf6;font-weight:600;z-index:5;">🔒</div>`;
+      milestoneBarHTML += barHTML(m.devEndDate, m.devEndDate, 'gantt-bar-milestone-freeze', '封版');
     }
     bodyHTML += `
       <div class="gantt-row${isTest ? ' test-row' : ''}">
@@ -1938,7 +1938,7 @@ function renderGantt() {
           ${bgCellsHTML()}
           ${barHTML(m.devStartDate, m.devEndDate, barCls, barLabel)}
           ${m._jdStart && m._jdEnd ? barHTML(m._jdStart, m._jdEnd, 'gantt-bar-jd', '联调') : ''}
-          ${milestoneHTML}
+          ${milestoneBarHTML}
         </div>
       </div>`;
   });
@@ -1983,13 +1983,13 @@ function renderSummary(jdStart, testStart, testEnd) {
 
   // 构建：所有有日期的卡片先收集，然后按日期排序；总工期和目标提测固定在最末
   const dateCards = [];
-  if (devStart)  dateCards.push({ label: '开发开始', value: devStart, sub: weekOf(devStart), color: 'dev' });
-  if (devEnd)    dateCards.push({ label: '开发完成', value: devEnd,   sub: weekOf(devEnd),   color: 'dev' });
-  if (jdStart)   dateCards.push({ label: '联调开始', value: jdStart,  sub: weekOf(jdStart),  color: 'jd' });
-  if (jdEnd)     dateCards.push({ label: '联调完成', value: jdEnd,    sub: weekOf(jdEnd),    color: 'jd' });
-  if (testStart) dateCards.push({ label: '提测日期', value: testStart, sub: weekOf(testStart), color: 'test' });
-  if (testEnd)   dateCards.push({ label: '测试完成', value: testEnd,   sub: weekOf(testEnd),   color: 'test' });
-  // 上线日期（红色）、发布日期（蓝色）、客户端封版（紫色）
+  if (devStart)  dateCards.push({ label: '开发开始', value: devStart, sub: weekOf(devStart) });
+  if (devEnd)    dateCards.push({ label: '开发完成', value: devEnd,   sub: weekOf(devEnd) });
+  if (jdStart)   dateCards.push({ label: '联调开始', value: jdStart,  sub: weekOf(jdStart) });
+  if (jdEnd)     dateCards.push({ label: '联调完成', value: jdEnd,    sub: weekOf(jdEnd) });
+  if (testStart) dateCards.push({ label: '提测日期', value: testStart, sub: weekOf(testStart) });
+  if (testEnd)   dateCards.push({ label: '测试完成', value: testEnd,   sub: weekOf(testEnd) });
+  // 上线日期（红色高亮）、发布日期（蓝色高亮）、客户端封版（紫色高亮）
   members.filter(m => m.role === 'backend' && m.onlineDate).forEach(m =>
     dateCards.push({ label: `${m.label} 上线`, value: m.onlineDate, sub: weekOf(m.onlineDate), color: 'online' })
   );
@@ -2012,26 +2012,23 @@ function renderSummary(jdStart, testStart, testEnd) {
   if (targetLabel) cards.push({ label: '目标提测', value: targetLabel, sub: targetSub });
   cards.push({ label: '总工期', value: totalDays ? `${totalDays} 天` : '—', sub: '工作日' });
 
-  // 卡片颜色映射
-  const cardColorMap = {
-    dev:     { border: '#4f6ef7', bg: 'linear-gradient(135deg,#eef1fe,#dbeafe)', text: '#4f6ef7' },
-    jd:      { border: '#f59e0b', bg: 'linear-gradient(135deg,#fffbeb,#fef3c7)', text: '#b45309' },
-    test:    { border: '#22c55e', bg: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', text: '#16a34a' },
+  // 仅交付节点卡片高亮着色
+  const highlightMap = {
     online:  { border: '#ef4444', bg: 'linear-gradient(135deg,#fef2f2,#fecaca)', text: '#dc2626' },
     publish: { border: '#0ea5e9', bg: 'linear-gradient(135deg,#f0f9ff,#e0f2fe)', text: '#0369a1' },
     freeze:  { border: '#8b5cf6', bg: 'linear-gradient(135deg,#faf5ff,#f3e8ff)', text: '#7c3aed' },
   };
 
   document.getElementById('summaryCards').innerHTML = cards.map(c => {
-    const cm = cardColorMap[c.color];
-    const style = cm ? `border-color:${cm.border};background:${cm.bg};` : '';
-    const labelStyle = cm ? `color:${cm.text};` : '';
-    const valueStyle = cm ? `color:${cm.text};` : '';
+    const hl = highlightMap[c.color];
+    const style    = hl ? `border-color:${hl.border};background:${hl.bg};` : '';
+    const labelSty = hl ? `color:${hl.text};` : '';
+    const valueSty = hl ? `color:${hl.text};` : '';
     return `
     <div class="summary-card" ${style ? `style="${style}"` : ''}>
-      <div class="sc-label" ${labelStyle ? `style="${labelStyle}"` : ''}>${c.label}</div>
-      <div class="sc-value" style="font-size:${c.value && c.value.length > 10 ? '13px' : ''};${valueStyle}">${c.value}</div>
-      ${c.sub ? `<div class="sc-sub" ${labelStyle ? `style="${labelStyle};font-weight:500;"` : ''}>${c.sub}</div>` : ''}
+      <div class="sc-label" ${labelSty ? `style="${labelSty}"` : ''}>${c.label}</div>
+      <div class="sc-value" style="font-size:${c.value && c.value.length > 10 ? '13px' : ''};${valueSty}">${c.value}</div>
+      ${c.sub ? `<div class="sc-sub" ${labelSty ? `style="${labelSty};font-weight:500;"` : ''}>${c.sub}</div>` : ''}
     </div>`;
   }).join('');
 }
