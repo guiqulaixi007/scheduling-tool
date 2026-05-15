@@ -232,6 +232,22 @@
   .modal-title  { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 
+  /* ===== 自定义角色弹窗 ===== */
+  .icon-opt {
+    font-size: 22px; cursor: pointer; padding: 4px; border-radius: 6px;
+    border: 2px solid transparent; transition: border-color 0.15s;
+    line-height: 1;
+  }
+  .icon-opt:hover { border-color: var(--primary); }
+  .icon-opt.selected { border-color: var(--primary); background: var(--primary-light); }
+  .color-opt {
+    width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+    border: 3px solid transparent; transition: border-color 0.15s, transform 0.15s;
+  }
+  .color-opt:hover { transform: scale(1.15); }
+  .color-opt.selected { border-color: var(--text) !important; transform: scale(1.1); }
+  .role-custom { --rc: #64748b; }
+
   /* ===== 响应式 ===== */
   @media (max-width: 640px) {
     .main { padding: 16px 12px 60px; }
@@ -359,6 +375,9 @@
         <button class="role-type-btn" onclick="addMember('ios')">      <span>📱</span> iOS 工程师</button>
         <button class="role-type-btn" onclick="addMember('android')">  <span>🤖</span> Android 工程师</button>
         <button class="role-type-btn" onclick="addMember('test')">     <span>🧪</span> 测试工程师</button>
+        <button class="role-type-btn" onclick="showCustomRoleModal()" style="border-style:dashed;color:var(--primary);border-color:var(--primary);">
+          <span>+</span> 自定义角色
+        </button>
       </div>
     </div>
 
@@ -648,12 +667,25 @@ const ROLE_CONFIG = {
   ios:      { label: 'iOS',     icon: '📱',  color: '#8b5cf6' },
   android:  { label: 'Android', icon: '🤖',  color: '#10b981' },
   test:     { label: '测试',    icon: '🧪',  color: '#f59e0b' },
+  custom:   { label: '自定义',  icon: '👤',  color: '#64748b' },
 };
 const ROLE_CLS = {
   backend: 'role-backend', frontend: 'role-frontend',
-  ios: 'role-ios', android: 'role-android', test: 'role-test',
+  ios: 'role-ios', android: 'role-android', test: 'role-test', custom: 'role-custom',
 };
 const SUFFIX = ['A','B','C','D','E','F'];
+
+/** 安全获取角色配置，自定义角色直接用 member 上存储的 customLabel/customColor */
+function getRoleCfg(member) {
+  if (member.role === 'custom') {
+    return {
+      label: member.customLabel || '自定义',
+      icon:  member.customIcon  || '👤',
+      color: member.customColor || '#64748b',
+    };
+  }
+  return ROLE_CONFIG[member.role] || { label: member.role, icon: '👤', color: '#64748b' };
+}
 
 let state = {
   projectName: '',
@@ -667,18 +699,24 @@ function genId() {
 }
 
 /** 添加一个新角色 */
-function addMember(role) {
+function addMember(role, customOpts) {
   const existing = state.members.filter(m => m.role === role);
   const suffix = SUFFIX[existing.length] || String(existing.length + 1);
-  const cfg = ROLE_CONFIG[role];
+  const cfg = role === 'custom' && customOpts
+    ? { label: customOpts.label || '自定义' }
+    : (ROLE_CONFIG[role] || { label: role });
   const today = dateToStr(new Date());
   const devStart = state.reviewDate || today;
 
   const member = {
     id: genId(),
     role,
-    label: `${cfg.label}-${suffix}`,
-    dependencies: [],        // 依赖的其他成员 ID
+    label: role === 'custom' && customOpts ? customOpts.label : `${cfg.label}-${suffix}`,
+    // 自定义角色附加字段
+    customLabel: role === 'custom' ? (customOpts?.label || '自定义') : undefined,
+    customIcon:  role === 'custom' ? (customOpts?.icon  || '👤')    : undefined,
+    customColor: role === 'custom' ? (customOpts?.color || '#64748b'): undefined,
+    dependencies: [],
     devStartDate: devStart,
     devSP: '',
     devEndDate: '',
@@ -687,23 +725,22 @@ function addMember(role) {
     expanded: true,
   };
   state.members.push(member);
-  saveState();
-  renderMemberList();
+  renderMemberList();   // 先渲染 UI
   updateJointDebugInfo();
   checkGenerateBtn();
+  saveState();          // 渲染完再保存，避免 Firebase 回调在渲染前触发 applyState
 }
 
 /** 删除角色 */
 function removeMember(id) {
   state.members = state.members.filter(m => m.id !== id);
-  // 清理其他成员对该角色的依赖引用
   state.members.forEach(m => {
     m.dependencies = m.dependencies.filter(d => d !== id);
   });
-  saveState();
-  renderMemberList();
+  renderMemberList();   // 先渲染
   updateJointDebugInfo();
   checkGenerateBtn();
+  saveState();          // 渲染后保存
 }
 
 /** 更新成员某个字段 */
@@ -1236,7 +1273,7 @@ function renderMemberList() {
                 <input type="checkbox"
                   ${member.dependencies.includes(o.id) ? 'checked' : ''}
                   onchange="toggleDep('${member.id}','${o.id}',this.checked)">
-                <span>${ROLE_CONFIG[o.role].icon} ${o.label}</span>
+                <span>${getRoleCfg(o).icon} ${o.label}</span>
               </label>
             `).join('')}
           </div>
@@ -1245,7 +1282,7 @@ function renderMemberList() {
       `;
     }
 
-    // ---- 测试天数行（仅测试角色显示） ----
+    // ---- 测试天数行（测试角色显示，其他角色隐藏） ----
     const testDaysHTML = member.role === 'test' ? `
       <div class="form-group">
         <label class="form-label">测试天数（工作日）</label>
@@ -1328,7 +1365,7 @@ function renderMemberList() {
         </div>
 
         <div style="font-size:12px;color:var(--text-secondary);padding:8px 10px;background:var(--primary-light);border-radius:var(--radius-sm);">
-          💡 联调起点由所有角色的最晚开发完成日期统一决定，联调期间各端同步进行
+          💡 联调起点由所有角色最晚开发完成日期统一决定；联调天数填 0 表示该角色不参与联调
         </div>
       </div>
     `;
@@ -1360,17 +1397,18 @@ function updateJointDebugInfo() {
   const displayEl = document.getElementById('jointDebugStartDisplay');
   const descEl    = document.getElementById('jointDebugStartDesc');
 
-  const valid = state.members.filter(m => m.devEndDate);
-  if (!valid.length) { jdInfoEl.style.display = 'none'; return; }
+  // 只考虑"联调天数 > 0"且有开发完成日期的成员
+  const jdParticipants = state.members.filter(m => Number(m.jointDebugDays) > 0 && m.devEndDate);
+  if (!jdParticipants.length) { jdInfoEl.style.display = 'none'; return; }
 
-  const jdStart = calcJointDebugStart(valid);
+  const jdStart = calcJointDebugStart(jdParticipants);
   if (!jdStart) { jdInfoEl.style.display = 'none'; return; }
 
   jdInfoEl.style.display = '';
   displayEl.textContent  = formatDate(jdStart);
 
-  const maxEnd    = [...valid.map(m => m.devEndDate)].sort().pop();
-  const lastMember = valid.find(m => m.devEndDate === maxEnd);
+  const maxEnd     = [...jdParticipants.map(m => m.devEndDate)].sort().pop();
+  const lastMember = jdParticipants.find(m => m.devEndDate === maxEnd);
   descEl.textContent = lastMember
     ? `（最晚完成：${lastMember.label} ${maxEnd}）`
     : '';
@@ -1386,12 +1424,13 @@ function renderGantt() {
   const members = state.members;
 
   // 1. 计算联调起始/结束
-  const jdStart = calcJointDebugStart(members);
+  // 联调起点只取"联调天数 > 0"的成员的开发完成日期中最晚的 +1 工作日
+  const jdParticipants = members.filter(m => Number(m.jointDebugDays) > 0 && m.devEndDate);
+  const jdStart = jdParticipants.length > 0 ? calcJointDebugStart(jdParticipants) : null;
   members.forEach(m => {
-    m._jdStart = jdStart;
-    m._jdEnd   = (jdStart && m.jointDebugDays > 0)
-                   ? endDateFromSP(jdStart, m.jointDebugDays)
-                   : null;
+    const jd = Number(m.jointDebugDays);
+    m._jdStart = (jdStart && jd > 0) ? jdStart : null;
+    m._jdEnd   = (jdStart && jd > 0) ? endDateFromSP(jdStart, jd) : null;
   });
 
   // 2. 计算测试阶段（由测试工程师的 testDays 决定）
@@ -1580,7 +1619,51 @@ function renderSummary(jdStart, testStart, testEnd) {
 }
 
 // ============================================================
-// Part 9: 初始化入口
+// Part 9: 自定义角色弹窗
+// ============================================================
+
+let _selectedCustomColor = '#64748b';
+
+function showCustomRoleModal() {
+  _selectedCustomColor = '#64748b';
+  document.getElementById('customRoleName').value = '';
+  document.getElementById('customRoleIcon').value = '👤';
+  // 重置选中状态
+  document.querySelectorAll('.color-opt').forEach(el => {
+    el.classList.toggle('selected', el.dataset.color === _selectedCustomColor);
+  });
+  document.querySelectorAll('.icon-opt').forEach(el => el.classList.remove('selected'));
+  document.getElementById('customRoleModal').classList.add('show');
+  setTimeout(() => document.getElementById('customRoleName').focus(), 200);
+}
+
+function closeCustomRoleModal() {
+  document.getElementById('customRoleModal').classList.remove('show');
+}
+
+function selectIcon(el) {
+  document.querySelectorAll('.icon-opt').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('customRoleIcon').value = el.dataset.icon;
+}
+
+function selectColor(el) {
+  document.querySelectorAll('.color-opt').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  _selectedCustomColor = el.dataset.color;
+}
+
+function confirmCustomRole() {
+  const name = document.getElementById('customRoleName').value.trim();
+  if (!name) { showToast('⚠️ 请填写角色名称'); return; }
+  const icon  = document.getElementById('customRoleIcon').value.trim() || '👤';
+  const color = _selectedCustomColor || '#64748b';
+  closeCustomRoleModal();
+  addMember('custom', { label: name, icon, color });
+}
+
+// ============================================================
+// Part 10: 初始化入口
 // ============================================================
 
 function init() {
