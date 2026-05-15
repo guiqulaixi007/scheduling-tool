@@ -1076,6 +1076,23 @@ let _db           = null;   // Firebase Database 实例
 let _roomId       = null;   // 当前房间 ID
 let _remoteUnsubscribe = null; // 取消监听函数
 let _ignoreNextRemote = false; // 防止本地写入触发自身回调
+let _lastSyncAt   = null;   // 最近同步时间
+
+/** 递归清洗对象，移除 Firebase 不接受的 undefined 字段 */
+function sanitizeForFirebase(value) {
+  if (Array.isArray(value)) {
+    return value.map(item => sanitizeForFirebase(item));
+  }
+  if (value && typeof value === 'object') {
+    const result = {};
+    Object.keys(value).forEach(key => {
+      const v = sanitizeForFirebase(value[key]);
+      if (v !== undefined) result[key] = v;
+    });
+    return result;
+  }
+  return value === undefined ? undefined : value;
+}
 
 /** 生成房间 ID：8 位随机字母数字 */
 function genRoomId() {
@@ -1134,9 +1151,15 @@ async function initFirebase(roomId) {
       const data = snap.val();
       if (data && Array.isArray(data.members)) {
         applyState(data);
+        _lastSyncAt = new Date();
+        // 无论当前在哪一步，先保证基础表单值同步
+        document.getElementById('projectName').value    = state.projectName || '';
+        document.getElementById('reviewDate').value     = state.reviewDate || '';
+        document.getElementById('targetTestDate').value = state.targetTestDate || '';
         // 根据当前步骤刷新 UI
         if (currentStep === 2) { renderMemberList(); updateJointDebugInfo(); checkGenerateBtn(); }
         if (currentStep === 3) renderGantt();
+        updateSyncStatus('online', roomId);
       }
     });
 
@@ -1152,11 +1175,19 @@ async function initFirebase(roomId) {
 async function pushToFirebase() {
   if (!_db || !_roomId) return;
   try {
+    const safeState = sanitizeForFirebase({
+      ...state,
+      updatedAt: Date.now(),
+    });
     _ignoreNextRemote = true;
-    await _db.ref(`rooms/${_roomId}`).set(state);
+    await _db.ref(`rooms/${_roomId}`).set(safeState);
+    _lastSyncAt = new Date();
+    updateSyncStatus('online', _roomId);
   } catch(e) {
     console.warn('[Firebase] 写入失败:', e);
     _ignoreNextRemote = false;
+    updateSyncStatus('error', _roomId);
+    showToast('🔴 协作数据同步失败，请检查网络或 Firebase 规则', 4000);
   }
 }
 
@@ -1170,20 +1201,26 @@ function saveState() {
 function updateSyncStatus(status, roomId) {
   const el = document.getElementById('syncStatus');
   if (!el) return;
+  const suffix = _lastSyncAt ? ` · ${String(_lastSyncAt.getHours()).padStart(2,'0')}:${String(_lastSyncAt.getMinutes()).padStart(2,'0')}:${String(_lastSyncAt.getSeconds()).padStart(2,'0')}` : '';
   const map = {
     local:   { text: '📁 本地模式',       color: '#64748b' },
     online:  { text: '🟢 实时协作中',     color: '#22c55e' },
-    error:   { text: '🔴 连接失败',        color: '#ef4444' },
+    error:   { text: '🔴 同步失败',        color: '#ef4444' },
     loading: { text: '⏳ 连接中…',         color: '#f59e0b' },
   };
   const cfg = map[status] || map.local;
-  el.textContent = cfg.text + (roomId ? `  房间: ${roomId}` : '');
+  el.textContent = cfg.text + (roomId ? `  房间: ${roomId}` : '') + suffix;
   el.style.color = cfg.color;
 }
 
 // ---- 房间操作 ----
 /** 新建房间：生成 roomId，写入 URL，推送当前数据 */
 async function createRoom() {
+  // 先把步骤一当前表单值同步进 state，避免房间初始化为空标题
+  state.projectName    = document.getElementById('projectName').value.trim() || state.projectName || '';
+  state.reviewDate     = document.getElementById('reviewDate').value || state.reviewDate || '';
+  state.targetTestDate = document.getElementById('targetTestDate').value || state.targetTestDate || '';
+
   const roomId = genRoomId();
   setRoomIdInURL(roomId);
   updateSyncStatus('loading');
@@ -1196,6 +1233,9 @@ async function createRoom() {
 async function joinRoom(roomId) {
   updateSyncStatus('loading');
   await initFirebase(roomId);
+
+  // 如果房间当前是空的，而本地已有数据，则不主动覆盖；等待远端回调优先。
+  // 这里不做自动回填，避免 B 用空白本地状态把 A 的房间覆盖掉。
 }
 
 /** 复制协作链接 */
