@@ -24,7 +24,7 @@
   }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
-
+   // https://docs.corp.kuaishou.com/d/home/fcABr7OuUjYW2y4U7RPGJrVEN
   /* ===== 顶部导航 ===== */
   .header {
     background: var(--bg-card); border-bottom: 1px solid var(--border);
@@ -70,6 +70,50 @@
   }
   .form-input:focus, .form-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,110,247,0.12); }
   .form-input-sm { padding: 7px 10px; font-size: 13px; }
+
+  /* ===== 日期输入交互增强 ===== */
+  input[type="date"] {
+    min-height: 40px;
+    padding-right: 40px;
+    cursor: pointer;
+    position: relative;
+    background-image: linear-gradient(to right, transparent calc(100% - 40px), #f8fafc calc(100% - 40px));
+  }
+  input[type="date"]:hover {
+    border-color: var(--primary);
+    background-image: linear-gradient(to right, transparent calc(100% - 40px), #eef1fe calc(100% - 40px));
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 1;
+    width: 24px;
+    height: 24px;
+    padding: 6px;
+    margin-right: -4px;
+    border-radius: 6px;
+    background-color: rgba(79,110,247,0.10);
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    background-color: rgba(79,110,247,0.20);
+  }
+  input[type="date"]::-webkit-datetime-edit,
+  input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+  input[type="date"]::-webkit-datetime-edit-text,
+  input[type="date"]::-webkit-datetime-edit-month-field,
+  input[type="date"]::-webkit-datetime-edit-day-field,
+  input[type="date"]::-webkit-datetime-edit-year-field {
+    cursor: pointer;
+  }
+  input[type="date"]::before {
+    content: '📅';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    font-size: 14px;
+    opacity: 0.75;
+  }
   .form-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
   textarea.form-input { min-height: 120px; resize: vertical; font-family: monospace; font-size: 12px; }
