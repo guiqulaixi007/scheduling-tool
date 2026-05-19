@@ -1892,13 +1892,8 @@ function renderGantt() {
     const width = rawWidth;
     const left = s * CELL_W;
 
-    // 文案展示规则：
-    // 1) 开发/测试必须展示
-    // 2) 里程碑（上线/发布/封版）必须展示
-    // 3) 其他阶段（如联调）在空间足够时展示
-    const forceShowText = label === '开发' || label === '测试' || isMilestone;
-    const showText = forceShowText || width > 40;
-    const text = showText ? label : '';
+    // 文案展示规则：所有 bar 都展示文案
+    const text = label;
 
     const compactStyle = width <= 32
       ? 'font-size:10px;padding:0 3px;'
