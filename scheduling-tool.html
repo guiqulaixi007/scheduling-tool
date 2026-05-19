@@ -1942,15 +1942,15 @@ function renderGantt() {
     // 交付节点 bar：后端上线 / 前端发布 / 客户端封版
     let milestoneBarHTML = '';
     if (m.role === 'backend' && m.onlineDate) {
-      milestoneBarHTML += barHTML(m.onlineDate, m.onlineDate, 'gantt-bar-milestone-online', '交付-上线');
+      milestoneBarHTML += barHTML(m.onlineDate, m.onlineDate, 'gantt-bar-milestone-online', '上线');
     }
     if (m.role === 'frontend' && m.publishDate) {
-      milestoneBarHTML += barHTML(m.publishDate, m.publishDate, 'gantt-bar-milestone-publish', '交付-发布');
+      milestoneBarHTML += barHTML(m.publishDate, m.publishDate, 'gantt-bar-milestone-publish', '发布');
     }
     if (m.role === 'ios' || m.role === 'android') {
       const finalFreezeDate = m.freezeDate || (testEnd ? addWorkdays(testEnd, 1) : '');
       if (finalFreezeDate) {
-        milestoneBarHTML += barHTML(finalFreezeDate, finalFreezeDate, 'gantt-bar-milestone-freeze', '交付-封版');
+        milestoneBarHTML += barHTML(finalFreezeDate, finalFreezeDate, 'gantt-bar-milestone-freeze', '封版');
       }
     }
     bodyHTML += `
