@@ -1888,11 +1888,11 @@ function renderGantt() {
 
     const rawWidth = Math.max((e - s + 1) * CELL_W - 2, 8);
     const isMilestone = barCls.includes('gantt-bar-milestone');
-    const width = isMilestone ? Math.max(rawWidth, 62) : rawWidth;
+    const width = isMilestone ? Math.max(Math.floor(CELL_W * 0.45), 10) : rawWidth;
     const leftBase = s * CELL_W;
-    const left = isMilestone ? Math.max(leftBase - Math.floor((width - rawWidth) / 2), 0) : leftBase;
+    const left = isMilestone ? leftBase + Math.max(Math.floor((rawWidth - width) / 2), 0) : leftBase;
 
-    const text = isMilestone ? label : (width > 40 ? label : '');
+    const text = isMilestone ? '' : (width > 40 ? label : '');
     return `<div class="gantt-bar ${barCls}" style="left:${left}px;width:${width}px;"
               title="${label}：${startStr} ~ ${endStr}">${text}</div>`;
   }
