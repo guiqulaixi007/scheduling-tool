@@ -1886,14 +1886,25 @@ function renderGantt() {
     const e = ei >= 0 ? ei : dates.length - 1;
     if (s > dates.length - 1) return '';
 
+    // bar 宽度严格限制在实际占用日期跨度内，不额外放大
     const rawWidth = Math.max((e - s + 1) * CELL_W - 2, 8);
     const isMilestone = barCls.includes('gantt-bar-milestone');
-    const width = isMilestone ? Math.max(Math.floor(CELL_W * 0.45), 10) : rawWidth;
-    const leftBase = s * CELL_W;
-    const left = isMilestone ? leftBase + Math.max(Math.floor((rawWidth - width) / 2), 0) : leftBase;
+    const width = rawWidth;
+    const left = s * CELL_W;
 
-    const text = isMilestone ? '' : (width > 40 ? label : '');
-    return `<div class="gantt-bar ${barCls}" style="left:${left}px;width:${width}px;"
+    // 文案展示规则：
+    // 1) 开发/测试必须展示
+    // 2) 里程碑（上线/发布/封版）必须展示
+    // 3) 其他阶段（如联调）在空间足够时展示
+    const forceShowText = label === '开发' || label === '测试' || isMilestone;
+    const showText = forceShowText || width > 40;
+    const text = showText ? label : '';
+
+    const compactStyle = width <= 32
+      ? 'font-size:10px;padding:0 3px;'
+      : '';
+
+    return `<div class="gantt-bar ${barCls}" style="left:${left}px;width:${width}px;${compactStyle}"
               title="${label}：${startStr} ~ ${endStr}">${text}</div>`;
   }
 
