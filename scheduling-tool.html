@@ -257,7 +257,6 @@
     padding: 4px 2px; border-right: 1px solid #f1f5f9;
   }
   .gantt-date-cell.weekend { background: #f8fafc; color: #94a3b8; }
-  .gantt-date-cell.today-col { background: #eff6ff; color: var(--primary); font-weight: 700; }
   .gantt-date-cell .dc-month { font-weight: 600; font-size: 10px; }
   .gantt-date-cell .dc-day   { font-size: 13px; font-weight: 500; }
   .gantt-date-cell .dc-week  { font-size: 9px; opacity: 0.7; }
@@ -289,7 +288,6 @@
   .gantt-bar-milestone-freeze  { background: #8b5cf6; height: 22px; font-size: 10px; font-weight: 700; border-radius: 4px; box-shadow: 0 2px 6px rgba(139,92,246,0.3); padding: 0 4px; }
   .gantt-cell-bg { position: absolute; top: 0; bottom: 0; }
   .gantt-cell-bg.weekend-bg { background: rgba(241,245,249,0.7); }
-  .gantt-cell-bg.today-line { border-left: 2px solid var(--primary); }
   .gantt-row.test-row .gantt-label-col { background: #f0fdf4; }
 
   /* ===== 工具栏 ===== */
@@ -1854,7 +1852,6 @@ function renderGantt() {
   const axisStart = allDates[0];
   const axisEnd   = addWorkdays(allDates[allDates.length - 1], 5);
   const dates     = getDateRange(axisStart, axisEnd);
-  const todayStr  = dateToStr(new Date());
 
   // 4. 渲染汇总卡片
   renderSummary(jdStart, testStart, testEnd);
@@ -1868,11 +1865,9 @@ function renderGantt() {
   function bgCellsHTML() {
     return dates.map((d, i) => {
       const isWH = isWeekendOrHoliday(d);
-      const isToday = d === todayStr;
       let cls = 'gantt-cell-bg';
       if (isWH) cls += ' weekend-bg';
-      if (isToday) cls += ' today-line';
-      return `<div class="${cls}" style="left:${i * CELL_W}px;width:${CELL_W}px;" ${isToday ? 'title="今天"' : ''}></div>`;
+      return `<div class="${cls}" style="left:${i * CELL_W}px;width:${CELL_W}px;"></div>`;
     }).join('');
   }
 
@@ -1916,10 +1911,8 @@ function renderGantt() {
     const m   = dt.getMonth() + 1;
     const weeks = ['日','一','二','三','四','五','六'];
     const isWH    = isWeekendOrHoliday(d);
-    const isToday = d === todayStr;
     let cls = 'gantt-date-cell';
-    if (isToday) cls += ' today-col';
-    else if (isWH) cls += ' weekend';
+    if (isWH) cls += ' weekend';
     // 月份标签：每月1号 或 轴的第一天 才显示
     const monthLabel = (day === 1 || i === 0) ? `${m}月` : '';
     headerHTML += `
